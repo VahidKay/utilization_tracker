@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/utilization-tracker
-Environment="TRACKER_CONFIG=/etc/utilization-tracker/config.yaml"
+Environment="TRACKER_CONFIG=/opt/utilization-tracker/config/config.yaml"
 ExecStart=/usr/bin/python3 /opt/utilization-tracker/src/tracker.py
 Restart=on-failure
 RestartSec=10s

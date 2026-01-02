@@ -190,7 +190,7 @@ class UtilizationTracker:
 def main():
     """Entry point for the tracker."""
     # Get config path from environment or use default
-    config_path = os.environ.get('TRACKER_CONFIG', '/etc/utilization-tracker/config.yaml')
+    config_path = os.environ.get('TRACKER_CONFIG', '/opt/utilization-tracker/config/config.yaml')
 
     # If config doesn't exist at default location, look in current directory
     if not os.path.exists(config_path):
