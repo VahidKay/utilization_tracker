@@ -1,0 +1,26 @@
+# Configuration for Resource Utilization Tracker
+
+# Data collection interval in seconds
+collection_interval: 60
+
+# Database settings
+database:
+  path: "/var/lib/utilization-tracker/metrics.db"
+
+# Logging settings
+logging:
+  path: "/var/log/utilization-tracker/tracker.log"
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+
+# Metrics to collect
+metrics:
+  cpu: true
+  memory: true
+  disk: true
+  load_average: true
+  temperature: true
+
+# Data retention (days)
+retention_days: 30

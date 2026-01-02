@@ -1,0 +1,24 @@
+[Unit]
+Description=Utilization Tracker Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/utilization-tracker
+Environment="TRACKER_CONFIG=/etc/utilization-tracker/config.yaml"
+ExecStart=/usr/bin/python3 /opt/utilization-tracker/src/tracker.py
+Restart=on-failure
+RestartSec=10s
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=utilization-tracker
+
+[Install]
+WantedBy=multi-user.target
