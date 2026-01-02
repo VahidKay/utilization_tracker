@@ -55,14 +55,15 @@ help:
 	@echo "  $(YELLOW)make disable$(NC) - Disable service at boot"
 	@echo ""
 	@echo "Monitoring:"
-	@echo "  $(YELLOW)make monitor$(NC)      - Live monitoring (every 60s)"
-	@echo "  $(YELLOW)make verify$(NC)       - Verify tracker is working"
-	@echo "  $(YELLOW)make view-data$(NC)    - View metrics (last 20)"
-	@echo "  $(YELLOW)make logs$(NC)         - View live logs"
-	@echo "  $(YELLOW)make logs-tail$(NC)    - View last 50 log lines"
-	@echo "  $(YELLOW)make logs-failed$(NC)  - View failure logs"
-	@echo "  $(YELLOW)make query$(NC)        - Display current metrics"
-	@echo "  $(YELLOW)make disk-usage$(NC)   - Check database size"
+	@echo "  $(YELLOW)make monitor$(NC)         - Live monitoring (every 60s)"
+	@echo "  $(YELLOW)make verify$(NC)          - Verify tracker is working"
+	@echo "  $(YELLOW)make view-data$(NC)       - View metrics (last 20)"
+	@echo "  $(YELLOW)make logs$(NC)            - View live logs"
+	@echo "  $(YELLOW)make logs-tail$(NC)       - View last 50 log lines"
+	@echo "  $(YELLOW)make logs-failed$(NC)     - View failure logs"
+	@echo "  $(YELLOW)make query$(NC)           - Display current metrics"
+	@echo "  $(YELLOW)make query AVG=30$(NC)    - Display metrics + 30min averages"
+	@echo "  $(YELLOW)make disk-usage$(NC)      - Check database size"
 	@echo ""
 	@echo "Configuration & Maintenance:"
 	@echo "  $(YELLOW)make change-interval$(NC) - Change collection interval"
@@ -182,6 +183,9 @@ logs-tail: check-server
 
 query: check-server
 	@echo "$(GREEN)Querying metrics...$(NC)"
+	@if [ -n "$(AVG)" ]; then \
+		echo "$(YELLOW)(Showing averages over last $(AVG) minutes)$(NC)"; \
+	fi
 	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
 	VENV_DIR_EXPANDED=$$(echo "$(VENV_DIR)" | sed "s|^~|$$HOME|"); \
 	if [ ! -f "$$DB_PATH_EXPANDED" ]; then \
@@ -192,9 +196,17 @@ query: check-server
 		exit 1; \
 	fi; \
 	if [ -d "$$VENV_DIR_EXPANDED" ]; then \
-		$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED 10; \
+		if [ -n "$(AVG)" ]; then \
+			$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED $(AVG); \
+		else \
+			$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED; \
+		fi; \
 	else \
-		python3 scripts/query.py $$DB_PATH_EXPANDED 10; \
+		if [ -n "$(AVG)" ]; then \
+			python3 scripts/query.py $$DB_PATH_EXPANDED $(AVG); \
+		else \
+			python3 scripts/query.py $$DB_PATH_EXPANDED; \
+		fi; \
 	fi
 
 disk-usage: check-server
