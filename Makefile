@@ -1,8 +1,16 @@
 .PHONY: help deploy install start stop restart status enable disable logs query clean
 
-# Read remote host and port from config.yaml
+# Read configuration from config.yaml
 REMOTE_HOST := $(shell grep "^remote_host:" config.yaml | cut -d'"' -f2)
 SSH_PORT := $(shell grep "^ssh_port:" config.yaml | awk '{print $$2}')
+INSTALL_DIR := $(shell grep "install_dir:" config.yaml | cut -d'"' -f2)
+CONFIG_DIR := $(shell grep "config_dir:" config.yaml | cut -d'"' -f2)
+DATA_DIR := $(shell grep "data_dir:" config.yaml | cut -d'"' -f2)
+LOG_DIR := $(shell grep "log_dir:" config.yaml | cut -d'"' -f2)
+DB_FILENAME := $(shell awk '/^database:/,/^[a-z]/ { if (/filename:/) { gsub(/"/, ""); print $$2 } }' config.yaml)
+LOG_FILENAME := $(shell awk '/^logging:/,/^[a-z]/ { if (/filename:/) { gsub(/"/, ""); print $$2 } }' config.yaml)
+DB_PATH := $(DATA_DIR)/$(if $(DB_FILENAME),$(DB_FILENAME),metrics.db)
+LOG_PATH := $(LOG_DIR)/$(if $(LOG_FILENAME),$(LOG_FILENAME),tracker.log)
 
 # Colors for output
 GREEN := \033[0;32m
@@ -14,15 +22,19 @@ help:
 	@echo "$(GREEN)Utilization Tracker - Make Commands$(NC)"
 	@echo ""
 	@echo "Configuration:"
-	@echo "  Remote Host: $(YELLOW)$(REMOTE_HOST)$(NC)"
-	@echo "  SSH Port:    $(YELLOW)$(SSH_PORT)$(NC)"
+	@echo "  Remote Host:   $(YELLOW)$(REMOTE_HOST)$(NC)"
+	@echo "  SSH Port:      $(YELLOW)$(SSH_PORT)$(NC)"
+	@echo "  Install Dir:   $(YELLOW)$(INSTALL_DIR)$(NC)"
+	@echo "  Data Dir:      $(YELLOW)$(DATA_DIR)$(NC)"
+	@echo "  Database:      $(YELLOW)$(DB_PATH)$(NC)"
 	@echo "  (Edit config.yaml to change)"
 	@echo ""
 	@echo "Deployment:"
-	@echo "  $(YELLOW)make deploy$(NC)      - Deploy tracker to remote server"
-	@echo "  $(YELLOW)make redeploy$(NC)    - Stop service, redeploy, and restart"
+	@echo "  $(YELLOW)make deploy$(NC)      - Copy files to remote server"
+	@echo "  $(YELLOW)make config$(NC)      - Show full configuration"
 	@echo ""
-	@echo "Service Management (remote):"
+	@echo "Service Management (run on server):"
+	@echo "  $(YELLOW)make install$(NC)     - Install the tracker (run on server)"
 	@echo "  $(YELLOW)make start$(NC)       - Start the tracker service"
 	@echo "  $(YELLOW)make stop$(NC)        - Stop the tracker service"
 	@echo "  $(YELLOW)make restart$(NC)     - Restart the tracker service"
@@ -30,22 +42,23 @@ help:
 	@echo "  $(YELLOW)make enable$(NC)      - Enable service at boot"
 	@echo "  $(YELLOW)make disable$(NC)     - Disable service at boot"
 	@echo ""
-	@echo "Monitoring:"
+	@echo "Monitoring (run on server):"
 	@echo "  $(YELLOW)make logs$(NC)        - View live logs"
 	@echo "  $(YELLOW)make logs-tail$(NC)   - View last 50 log lines"
 	@echo "  $(YELLOW)make query$(NC)       - Query and display metrics"
 	@echo "  $(YELLOW)make disk-usage$(NC)  - Check database disk usage"
 	@echo ""
 	@echo "Maintenance:"
-	@echo "  $(YELLOW)make download-db$(NC) - Download database to local machine"
-	@echo "  $(YELLOW)make backup-db$(NC)   - Create backup of database on server"
+	@echo "  $(YELLOW)make download-db$(NC) - Download database to local machine (from local)"
+	@echo "  $(YELLOW)make backup-db$(NC)   - Create backup of database (run on server)"
 	@echo "  $(YELLOW)make clean$(NC)       - Remove local temporary files"
 	@echo ""
-	@echo "Quick Start:"
+	@echo "Workflow:"
 	@echo "  1. Edit $(YELLOW)config.yaml$(NC) and set your remote_host"
-	@echo "  2. Run $(YELLOW)make deploy$(NC)"
-	@echo "  3. Run $(YELLOW)make start enable$(NC)"
-	@echo "  4. Run $(YELLOW)make status$(NC) to verify"
+	@echo "  2. Run $(YELLOW)make deploy$(NC) from local machine"
+	@echo "  3. SSH to server and run $(YELLOW)make install$(NC)"
+	@echo "  4. Run $(YELLOW)make start enable$(NC) on server"
+	@echo "  5. Run $(YELLOW)make status$(NC) on server to verify"
 
 check-config:
 	@if [ "$(REMOTE_HOST)" = "user@your-server.com" ]; then \
@@ -54,84 +67,78 @@ check-config:
 	fi
 
 deploy: check-config
-	@echo "$(GREEN)Deploying to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
+	@echo "$(GREEN)Copying files to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
 	@chmod +x deploy.sh
 	./deploy.sh $(REMOTE_HOST) $(SSH_PORT)
 
-redeploy: check-config
-	@echo "$(GREEN)Redeploying to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
-	@echo "$(YELLOW)Stopping service...$(NC)"
-	-@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl stop utilization-tracker' 2>/dev/null || true
-	@echo "$(YELLOW)Deploying new version...$(NC)"
-	@chmod +x deploy.sh
-	./deploy.sh $(REMOTE_HOST) $(SSH_PORT)
-	@echo "$(YELLOW)Starting service...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl start utilization-tracker'
-	@echo "$(GREEN)Redeploy complete!$(NC)"
-	@$(MAKE) status
+install:
+	@echo "$(GREEN)Installing utilization tracker...$(NC)"
+	@if [ ! -f install.sh ]; then \
+		echo "$(RED)Error: install.sh not found. Are you in the project directory?$(NC)"; \
+		exit 1; \
+	fi
+	@chmod +x install.sh
+	sudo bash install.sh
 
-start: check-config
+start:
 	@echo "$(GREEN)Starting tracker service...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl start utilization-tracker'
+	sudo systemctl start utilization-tracker
 	@echo "$(GREEN)Service started$(NC)"
 	@$(MAKE) status
 
-stop: check-config
+stop:
 	@echo "$(YELLOW)Stopping tracker service...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl stop utilization-tracker'
+	sudo systemctl stop utilization-tracker
 	@echo "$(YELLOW)Service stopped$(NC)"
 
-restart: check-config
+restart:
 	@echo "$(YELLOW)Restarting tracker service...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl restart utilization-tracker'
+	sudo systemctl restart utilization-tracker
 	@echo "$(GREEN)Service restarted$(NC)"
 	@$(MAKE) status
 
-status: check-config
+status:
 	@echo "$(GREEN)Service Status:$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl status utilization-tracker --no-pager' || true
+	@sudo systemctl status utilization-tracker --no-pager || true
 
-enable: check-config
+enable:
 	@echo "$(GREEN)Enabling tracker service at boot...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl enable utilization-tracker'
+	sudo systemctl enable utilization-tracker
 	@echo "$(GREEN)Service enabled$(NC)"
 
-disable: check-config
+disable:
 	@echo "$(YELLOW)Disabling tracker service at boot...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo systemctl disable utilization-tracker'
+	sudo systemctl disable utilization-tracker
 	@echo "$(YELLOW)Service disabled$(NC)"
 
-logs: check-config
+logs:
 	@echo "$(GREEN)Streaming logs (Ctrl+C to exit)...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo journalctl -u utilization-tracker -f'
+	sudo journalctl -u utilization-tracker -f
 
-logs-tail: check-config
+logs-tail:
 	@echo "$(GREEN)Last 50 log entries:$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo journalctl -u utilization-tracker -n 50 --no-pager'
+	sudo journalctl -u utilization-tracker -n 50 --no-pager
 
-query: check-config
+query:
 	@echo "$(GREEN)Querying metrics...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo python3 -c "import sys; sys.path.insert(0, \"/opt/utilization-tracker\"); exec(open(\"/opt/utilization-tracker/src/query_remote.py\").read())"' || \
-	ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo sqlite3 /var/lib/utilization-tracker/metrics.db "SELECT datetime(timestamp) as time, cpu_percent, memory_percent, load_avg_1 FROM system_metrics ORDER BY timestamp DESC LIMIT 10;"'
+	@sudo python3 src/query_remote.py || \
+	sudo sqlite3 $(DB_PATH) "SELECT datetime(timestamp) as time, cpu_percent, memory_percent, load_avg_1 FROM system_metrics ORDER BY timestamp DESC LIMIT 10;"
 
-disk-usage: check-config
+disk-usage:
 	@echo "$(GREEN)Database disk usage:$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo du -h /var/lib/utilization-tracker/metrics.db && sudo sqlite3 /var/lib/utilization-tracker/metrics.db "SELECT COUNT(*) as system_records FROM system_metrics; SELECT COUNT(*) as disk_records FROM disk_metrics;"'
+	@sudo du -h $(DB_PATH)
+	@sudo sqlite3 $(DB_PATH) "SELECT COUNT(*) as system_records FROM system_metrics; SELECT COUNT(*) as disk_records FROM disk_metrics;"
 
 download-db: check-config
-	@echo "$(GREEN)Downloading database...$(NC)"
+	@echo "$(GREEN)Downloading database from $(REMOTE_HOST)...$(NC)"
 	@mkdir -p ./data
-	@scp -P $(SSH_PORT) $(REMOTE_HOST):/var/lib/utilization-tracker/metrics.db ./data/metrics-$$(date +%Y%m%d-%H%M%S).db
+	@scp -P $(SSH_PORT) $(REMOTE_HOST):$(DB_PATH) ./data/metrics-$$(date +%Y%m%d-%H%M%S).db
 	@echo "$(GREEN)Database downloaded to ./data/$(NC)"
 
-backup-db: check-config
-	@echo "$(GREEN)Creating database backup on server...$(NC)"
-	@ssh -p $(SSH_PORT) $(REMOTE_HOST) 'sudo cp /var/lib/utilization-tracker/metrics.db /var/lib/utilization-tracker/metrics-backup-$$(date +%Y%m%d-%H%M%S).db && sudo ls -lh /var/lib/utilization-tracker/metrics-backup-*.db | tail -5'
-
-install-local:
-	@echo "$(GREEN)Installing locally (for testing)...$(NC)"
-	@chmod +x install.sh
-	@sudo ./install.sh
+backup-db:
+	@echo "$(GREEN)Creating database backup...$(NC)"
+	@sudo cp $(DB_PATH) $(DATA_DIR)/metrics-backup-$$(date +%Y%m%d-%H%M%S).db
+	@sudo ls -lh $(DATA_DIR)/metrics-backup-*.db | tail -5
 
 test-connection: check-config
 	@echo "$(GREEN)Testing SSH connection to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
@@ -142,11 +149,6 @@ test-connection: check-config
 		exit 1; \
 	fi
 
-upload-analysis:
-	@echo "$(GREEN)Uploading analysis script...$(NC)"
-	@scp -P $(SSH_PORT) analysis/query_metrics.py $(REMOTE_HOST):/tmp/
-	@echo "$(GREEN)Run on server: ssh $(REMOTE_HOST) 'sudo python3 /tmp/query_metrics.py'$(NC)"
-
 clean:
 	@echo "$(YELLOW)Cleaning local temporary files...$(NC)"
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -155,15 +157,33 @@ clean:
 	@rm -rf /tmp/utilization-tracker-deploy-* 2>/dev/null || true
 	@echo "$(GREEN)Cleanup complete$(NC)"
 
-# Quick setup target
-setup: check-config deploy start enable
+config:
+	@echo "$(GREEN)=== Configuration ===$(NC)"
+	@echo ""
+	@echo "Remote Server:"
+	@echo "  Host:          $(YELLOW)$(REMOTE_HOST)$(NC)"
+	@echo "  SSH Port:      $(YELLOW)$(SSH_PORT)$(NC)"
+	@echo ""
+	@echo "Installation Paths:"
+	@echo "  Install Dir:   $(YELLOW)$(INSTALL_DIR)$(NC)"
+	@echo "  Config Dir:    $(YELLOW)$(CONFIG_DIR)$(NC)"
+	@echo "  Data Dir:      $(YELLOW)$(DATA_DIR)$(NC)"
+	@echo "  Log Dir:       $(YELLOW)$(LOG_DIR)$(NC)"
+	@echo ""
+	@echo "Database:"
+	@echo "  Path:          $(YELLOW)$(DB_PATH)$(NC)"
+	@echo ""
+	@echo "Edit $(YELLOW)config.yaml$(NC) to change these settings"
+
+# Quick setup target (run on server after deploying)
+setup: install start enable
 	@echo ""
 	@echo "$(GREEN)================================$(NC)"
 	@echo "$(GREEN)Setup Complete!$(NC)"
 	@echo "$(GREEN)================================$(NC)"
 	@echo ""
 	@echo "The tracker is now:"
-	@echo "  ✓ Deployed to $(REMOTE_HOST)"
+	@echo "  ✓ Installed"
 	@echo "  ✓ Running"
 	@echo "  ✓ Enabled at boot"
 	@echo ""

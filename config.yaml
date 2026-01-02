@@ -5,16 +5,25 @@
 remote_host: "server"
 ssh_port: 22
 
+# Installation paths (system directories on the server)
+paths:
+  install_dir: "/opt/utilization-tracker"
+  config_dir: "/opt/utilization-tracker/config"
+  data_dir: "/opt/utilization-tracker/data"
+  log_dir: "/opt/utilization-tracker/logs"
+
 # Data collection interval in seconds
 collection_interval: 60
 
 # Database settings
+# Note: path is constructed as {data_dir}/metrics.db
 database:
-  path: "/var/lib/utilization-tracker/metrics.db"
+  filename: "metrics.db"
 
 # Logging settings
+# Note: path is constructed as {log_dir}/tracker.log
 logging:
-  path: "/var/log/utilization-tracker/tracker.log"
+  filename: "tracker.log"
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR
   max_bytes: 10485760  # 10MB
   backup_count: 5

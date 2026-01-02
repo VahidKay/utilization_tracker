@@ -28,6 +28,8 @@ A lightweight Python tool for monitoring and recording resource utilization on U
 
 ### Deployment (Using Makefile - Recommended)
 
+**On your local machine:**
+
 1. **Edit [config.yaml](config.yaml)** and set your server:
 
 ```yaml
@@ -35,22 +37,31 @@ remote_host: "user@your-server.com"
 ssh_port: 22
 ```
 
-2. **Deploy and start** with a single command:
+2. **Deploy files to server:**
 
 ```bash
+make deploy
+```
+
+**On your remote server:**
+
+1. **SSH to the server and install:**
+
+```bash
+ssh user@your-server.com
+cd ~/utilization-tracker
 make setup
 ```
 
 That's it! The tracker is now running on your server.
 
-**Common commands:**
+**Common commands (run on server):**
 
 ```bash
 make status     # Check if running
 make logs       # View live logs
 make query      # See collected metrics
 make restart    # Restart service
-make redeploy   # Update after code changes
 ```
 
 See [MAKEFILE_GUIDE.md](MAKEFILE_GUIDE.md) for all commands.

@@ -11,11 +11,17 @@ class Config:
 
     DEFAULT_CONFIG = {
         'collection_interval': 60,
+        'paths': {
+            'install_dir': '/opt/utilization-tracker',
+            'config_dir': '/etc/utilization-tracker',
+            'data_dir': '/var/lib/utilization-tracker',
+            'log_dir': '/var/log/utilization-tracker'
+        },
         'database': {
-            'path': '/var/lib/utilization-tracker/metrics.db'
+            'filename': 'metrics.db'
         },
         'logging': {
-            'path': '/var/log/utilization-tracker/tracker.log',
+            'filename': 'tracker.log',
             'level': 'INFO',
             'max_bytes': 10485760,
             'backup_count': 5
@@ -24,7 +30,8 @@ class Config:
             'cpu': True,
             'memory': True,
             'disk': True,
-            'load_average': True
+            'load_average': True,
+            'temperature': True
         },
         'retention_days': 30
     }
@@ -43,6 +50,9 @@ class Config:
             self.load_config()
         else:
             self.logger.info("Using default configuration")
+
+        # Construct full paths from directory + filename
+        self._construct_paths()
 
     def load_config(self):
         """Load configuration from YAML file."""
@@ -74,6 +84,22 @@ class Config:
                 self.config[key].update(value)
             else:
                 self.config[key] = value
+
+    def _construct_paths(self):
+        """Construct full paths from directory + filename configuration."""
+        import os
+
+        # Get directory paths
+        data_dir = self.get('paths.data_dir', '/var/lib/utilization-tracker')
+        log_dir = self.get('paths.log_dir', '/var/log/utilization-tracker')
+
+        # Get filenames
+        db_filename = self.get('database.filename', 'metrics.db')
+        log_filename = self.get('logging.filename', 'tracker.log')
+
+        # Construct full paths
+        self.config['database']['path'] = os.path.join(data_dir, db_filename)
+        self.config['logging']['path'] = os.path.join(log_dir, log_filename)
 
     def get(self, key: str, default=None):
         """Get configuration value.

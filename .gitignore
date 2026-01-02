@@ -28,6 +28,14 @@ ENV/
 # Logs
 *.log
 
+# Runtime directories (created on server)
+/config/
+/data/
+/logs/
+
+# Downloaded data
+/data/
+
 # OS
 .DS_Store
 Thumbs.db

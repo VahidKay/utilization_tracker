@@ -2,18 +2,28 @@
 
 ## Setup (First Time)
 
+**On local machine:**
 ```bash
 # 1. Edit config.yaml - set your remote_host
 vim config.yaml
 
-# 2. Deploy, start, and enable
-make setup
-
-# 3. Verify
-make status
+# 2. Deploy files to server
+make deploy
 ```
 
-## Daily Commands
+**On remote server (after SSH):**
+```bash
+# 3. Install and start
+cd ~/utilization-tracker
+make setup
+
+# Or step by step:
+# make install
+# make start
+# make enable
+```
+
+## Daily Commands (run on server)
 
 ```bash
 make status        # Is it running?
@@ -21,7 +31,7 @@ make logs          # What's happening?
 make query         # Show me the data
 ```
 
-## Management
+## Management (run on server)
 
 ```bash
 make start         # Start service
@@ -31,12 +41,13 @@ make enable        # Auto-start on boot
 make disable       # Don't auto-start
 ```
 
-## Deployment
+## Deployment (run on local machine)
 
 ```bash
-make deploy        # First deployment
-make redeploy      # Update after changes
+make deploy        # Copy files to server
 ```
+
+Then SSH to server and run `make install` or `make setup`
 
 ## Monitoring
 

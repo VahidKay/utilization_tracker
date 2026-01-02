@@ -10,14 +10,28 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Configuration
-INSTALL_DIR="/opt/utilization-tracker"
-CONFIG_DIR="/etc/utilization-tracker"
-DATA_DIR="/var/lib/utilization-tracker"
-LOG_DIR="/var/log/utilization-tracker"
+# Read configuration from config.yaml if it exists
+if [ -f config.yaml ]; then
+    INSTALL_DIR=$(grep "install_dir:" config.yaml | cut -d'"' -f2)
+    CONFIG_DIR=$(grep "config_dir:" config.yaml | cut -d'"' -f2)
+    DATA_DIR=$(grep "data_dir:" config.yaml | cut -d'"' -f2)
+    LOG_DIR=$(grep "log_dir:" config.yaml | cut -d'"' -f2)
+else
+    # Default configuration
+    INSTALL_DIR="/opt/utilization-tracker"
+    CONFIG_DIR="/etc/utilization-tracker"
+    DATA_DIR="/var/lib/utilization-tracker"
+    LOG_DIR="/var/log/utilization-tracker"
+fi
+
 SERVICE_FILE="/etc/systemd/system/utilization-tracker.service"
 
 echo -e "${GREEN}=== Utilization Tracker Installation ===${NC}"
+echo -e "${GREEN}Install Directory: $INSTALL_DIR${NC}"
+echo -e "${GREEN}Config Directory: $CONFIG_DIR${NC}"
+echo -e "${GREEN}Data Directory: $DATA_DIR${NC}"
+echo -e "${GREEN}Log Directory: $LOG_DIR${NC}"
+echo ""
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
