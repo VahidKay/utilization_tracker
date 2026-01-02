@@ -39,7 +39,7 @@ SSH to your server and run the installation:
 ssh user@your-server.com
 cd /opt/utilization-tracker  # or your custom install_dir
 make install
-make start enable
+make start
 ```
 
 That's it! The tracker is now installed, running, and enabled at boot.
@@ -63,14 +63,12 @@ After deploying, SSH to your server (`ssh user@your-server.com`) and run these c
 
 #### Service Management
 
-| Command        | Description                |
-|----------------|----------------------------|
-| `make start`   | Start the service          |
-| `make stop`    | Stop the service           |
-| `make restart` | Restart the service        |
-| `make status`  | Check service status       |
-| `make enable`  | Enable service at boot     |
-| `make disable` | Disable at boot            |
+| Command        | Description                       |
+|----------------|-----------------------------------|
+| `make start`   | Start service and enable at boot  |
+| `make stop`    | Stop service and disable at boot  |
+| `make restart` | Restart the service               |
+| `make status`  | Check service status              |
 
 #### Monitoring & Verification
 
@@ -116,9 +114,8 @@ This copies files to the server at the `install_dir` specified in config.yaml.
 ssh user@your-server.com
 cd /opt/utilization-tracker  # or your custom install_dir
 sudo bash scripts/install.sh
-sudo systemctl start utilization-tracker
-sudo systemctl enable utilization-tracker
-sudo systemctl status utilization-tracker
+make start
+make status
 ```
 
 ## Installation Paths

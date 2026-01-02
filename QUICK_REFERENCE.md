@@ -16,7 +16,7 @@ make deploy
 # 3. Install and start (cd to install_dir from config.yaml)
 cd /opt/utilization-tracker
 make install
-make start enable
+make start
 ```
 
 ## Daily Commands (run on server)
@@ -30,11 +30,9 @@ make query         # Show me the data
 ## Management (run on server)
 
 ```bash
-make start         # Start service
-make stop          # Stop service
+make start         # Start service and enable at boot
+make stop          # Stop service and disable at boot
 make restart       # Restart service
-make enable        # Auto-start on boot
-make disable       # Don't auto-start
 ```
 
 ## Deployment (run on local machine)
@@ -90,6 +88,7 @@ All paths are configured in [config.yaml](config.yaml):
 | Path | Description |
 |------|-------------|
 | `install_dir` (default: `/opt/utilization-tracker/`) | Application files |
+| `venv_dir` (default: `/opt/utilization-tracker/venv/`) | Python virtual environment |
 | `config_dir` (default: `/opt/utilization-tracker/config/`) | Configuration |
 | `data_dir` (default: `/opt/utilization-tracker/data/`) | Database |
 | `log_dir` (default: `/opt/utilization-tracker/logs/`) | Log files |

@@ -13,21 +13,42 @@ NC='\033[0m' # No Color
 # Read configuration from config.yaml if it exists
 if [ -f config.yaml ]; then
     INSTALL_DIR=$(grep "install_dir:" config.yaml | cut -d'"' -f2)
+    VENV_DIR=$(grep "venv_dir:" config.yaml | cut -d'"' -f2)
     CONFIG_DIR=$(grep "config_dir:" config.yaml | cut -d'"' -f2)
     DATA_DIR=$(grep "data_dir:" config.yaml | cut -d'"' -f2)
     LOG_DIR=$(grep "log_dir:" config.yaml | cut -d'"' -f2)
 else
     # Default configuration
     INSTALL_DIR="/opt/utilization-tracker"
+    VENV_DIR="/opt/utilization-tracker/venv"
     CONFIG_DIR="/etc/utilization-tracker"
     DATA_DIR="/var/lib/utilization-tracker"
     LOG_DIR="/var/log/utilization-tracker"
+fi
+
+# Expand tilde in paths (use SUDO_USER's home if running with sudo)
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    USER_HOME="$HOME"
+fi
+
+INSTALL_DIR="${INSTALL_DIR/#\~/$USER_HOME}"
+VENV_DIR="${VENV_DIR/#\~/$USER_HOME}"
+CONFIG_DIR="${CONFIG_DIR/#\~/$USER_HOME}"
+DATA_DIR="${DATA_DIR/#\~/$USER_HOME}"
+LOG_DIR="${LOG_DIR/#\~/$USER_HOME}"
+
+# Fallback: if venv_dir not specified, use install_dir/venv
+if [ -z "$VENV_DIR" ]; then
+    VENV_DIR="$INSTALL_DIR/venv"
 fi
 
 SERVICE_FILE="/etc/systemd/system/utilization-tracker.service"
 
 echo -e "${GREEN}=== Utilization Tracker Installation ===${NC}"
 echo -e "${GREEN}Install Directory: $INSTALL_DIR${NC}"
+echo -e "${GREEN}Venv Directory: $VENV_DIR${NC}"
 echo -e "${GREEN}Config Directory: $CONFIG_DIR${NC}"
 echo -e "${GREEN}Data Directory: $DATA_DIR${NC}"
 echo -e "${GREEN}Log Directory: $LOG_DIR${NC}"
@@ -54,29 +75,35 @@ mkdir -p "$LOG_DIR"
 
 echo -e "${GREEN}[2/8] Creating Python virtual environment...${NC}"
 # Remove old venv if it exists
-if [ -d "$INSTALL_DIR/venv" ]; then
+if [ -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}Removing old virtual environment...${NC}"
-    rm -rf "$INSTALL_DIR/venv"
+    rm -rf "$VENV_DIR"
 fi
 
 # Create new venv
-python3 -m venv "$INSTALL_DIR/venv" || {
+python3 -m venv "$VENV_DIR" || {
     echo -e "${YELLOW}venv creation failed, trying to install python3-venv...${NC}"
     apt update
     apt install -y python3-venv
-    python3 -m venv "$INSTALL_DIR/venv"
+    python3 -m venv "$VENV_DIR"
 }
 
 echo -e "${GREEN}[3/8] Installing Python dependencies in venv...${NC}"
-"$INSTALL_DIR/venv/bin/pip" install --upgrade pip
-"$INSTALL_DIR/venv/bin/pip" install psutil pyyaml || {
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install psutil pyyaml || {
     echo -e "${YELLOW}Warning: pip install failed, trying with apt...${NC}"
     apt update
     apt install -y python3-psutil python3-yaml
 }
 
 echo -e "${GREEN}[4/8] Copying application files...${NC}"
-cp -r src/* "$INSTALL_DIR/src/"
+# Only copy if we're not already in the install directory
+CURRENT_DIR=$(pwd)
+if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
+    cp -r src/* "$INSTALL_DIR/src/"
+else
+    echo "Already in install directory, skipping copy..."
+fi
 chmod +x "$INSTALL_DIR/src/tracker.py"
 chmod +x "$INSTALL_DIR/src/query_remote.py" 2>/dev/null || true
 
@@ -98,7 +125,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/src/tracker.py
+ExecStart=$VENV_DIR/bin/python3 $INSTALL_DIR/src/tracker.py
 Restart=always
 RestartSec=10
 
@@ -124,7 +151,7 @@ EOF
 
 echo -e "${GREEN}=== Installation Complete ===${NC}"
 echo ""
-echo -e "${GREEN}Python virtual environment: $INSTALL_DIR/venv${NC}"
+echo -e "${GREEN}Python virtual environment: $VENV_DIR${NC}"
 echo -e "${GREEN}Database location: $DATA_DIR/metrics.db${NC}"
 echo -e "${GREEN}Log location: $LOG_DIR/tracker.log${NC}"
 echo ""
@@ -132,18 +159,15 @@ echo "Next steps:"
 echo "1. Review and customize the configuration:"
 echo -e "   ${YELLOW}nano $CONFIG_DIR/config.yaml${NC}"
 echo ""
-echo "2. Start the service:"
-echo -e "   ${YELLOW}sudo systemctl start utilization-tracker${NC}"
+echo "2. Start the service (also enables at boot):"
+echo -e "   ${YELLOW}make start${NC}"
 echo ""
-echo "3. Enable the service to start on boot:"
-echo -e "   ${YELLOW}sudo systemctl enable utilization-tracker${NC}"
+echo "3. Check service status:"
+echo -e "   ${YELLOW}make status${NC}"
 echo ""
-echo "4. Check service status:"
-echo -e "   ${YELLOW}sudo systemctl status utilization-tracker${NC}"
-echo ""
-echo "5. View logs:"
-echo -e "   ${YELLOW}sudo journalctl -u utilization-tracker -f${NC}"
+echo "4. View logs:"
+echo -e "   ${YELLOW}make logs${NC}"
 echo -e "   ${YELLOW}sudo tail -f $LOG_DIR/tracker.log${NC}"
 echo ""
-echo "6. Check the database:"
+echo "5. Check the database:"
 echo -e "   ${YELLOW}sudo sqlite3 $DATA_DIR/metrics.db \"SELECT * FROM system_metrics ORDER BY timestamp DESC LIMIT 5;\"${NC}"

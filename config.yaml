@@ -8,6 +8,7 @@ ssh_port: 22
 # Installation paths (system directories on the server)
 paths:
   install_dir: "~/work/utilization-tracker"
+  venv_dir: "~/work/utilization-tracker/venv"  # Python virtual environment
   config_dir: "~/work/utilization-tracker/config"
   data_dir: "~/work/utilization-tracker/data"
   log_dir: "~/work/utilization-tracker/logs"

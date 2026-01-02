@@ -1,4 +1,4 @@
-.PHONY: help deploy sync install start stop restart status enable disable logs logs-tail \
+.PHONY: help deploy sync install start stop restart status logs logs-tail \
         logs-failed query clean monitor verify view-data change-interval install-deps \
         check-config config test-connection backup-db download-db disk-usage setup
 
@@ -6,6 +6,7 @@
 REMOTE_HOST := $(shell grep "^remote_host:" config.yaml | cut -d'"' -f2)
 SSH_PORT := $(shell grep "^ssh_port:" config.yaml | awk '{print $$2}')
 INSTALL_DIR := $(shell grep "install_dir:" config.yaml | cut -d'"' -f2)
+VENV_DIR := $(shell grep "venv_dir:" config.yaml | cut -d'"' -f2)
 CONFIG_DIR := $(shell grep "config_dir:" config.yaml | cut -d'"' -f2)
 DATA_DIR := $(shell grep "data_dir:" config.yaml | cut -d'"' -f2)
 LOG_DIR := $(shell grep "log_dir:" config.yaml | cut -d'"' -f2)
@@ -40,12 +41,10 @@ help:
 	@echo "Service Management (run on server):"
 	@echo "  $(YELLOW)make install-deps$(NC) - Install Python dependencies"
 	@echo "  $(YELLOW)make install$(NC)      - Install the tracker (run on server)"
-	@echo "  $(YELLOW)make start$(NC)        - Start the tracker service"
-	@echo "  $(YELLOW)make stop$(NC)         - Stop the tracker service"
+	@echo "  $(YELLOW)make start$(NC)        - Start service and enable at boot"
+	@echo "  $(YELLOW)make stop$(NC)         - Stop service and disable at boot"
 	@echo "  $(YELLOW)make restart$(NC)      - Restart the tracker service"
 	@echo "  $(YELLOW)make status$(NC)       - Check service status"
-	@echo "  $(YELLOW)make enable$(NC)       - Enable service at boot"
-	@echo "  $(YELLOW)make disable$(NC)      - Disable service at boot"
 	@echo ""
 	@echo "Monitoring (run on server):"
 	@echo "  $(YELLOW)make monitor$(NC)        - Start live monitoring (refreshes every 60s)"
@@ -70,7 +69,7 @@ help:
 	@echo "  2. Run $(YELLOW)make deploy$(NC) to copy files to remote server"
 	@echo "  3. SSH to server: $(YELLOW)ssh $(REMOTE_HOST)$(NC)"
 	@echo "  4. Run $(YELLOW)cd $(INSTALL_DIR) && make install$(NC)"
-	@echo "  5. Run $(YELLOW)make start enable$(NC) to start the service"
+	@echo "  5. Run $(YELLOW)make start$(NC) to start and enable the service"
 	@echo "  6. Run $(YELLOW)make verify$(NC) to confirm it's working"
 
 check-config:
@@ -91,7 +90,7 @@ deploy: check-config
 	@echo "  $(YELLOW)ssh -p $(SSH_PORT) $(REMOTE_HOST)$(NC)"
 	@echo "  $(YELLOW)cd $(INSTALL_DIR)$(NC)"
 	@echo "  $(YELLOW)make install$(NC)"
-	@echo "  $(YELLOW)make start enable$(NC)"
+	@echo "  $(YELLOW)make start$(NC)"
 
 # Sync local changes to remote (faster than full deploy, doesn't reinstall)
 sync: check-config
@@ -100,13 +99,19 @@ sync: check-config
 		echo "$(RED)Error: rsync not found. Please install rsync.$(NC)"; \
 		exit 1; \
 	fi
-	@rsync -avz --delete -e "ssh -p $(SSH_PORT)" \
+	@rsync -avz -e "ssh -p $(SSH_PORT)" \
 		--exclude='.git' \
 		--exclude='__pycache__' \
 		--exclude='*.pyc' \
 		--exclude='data' \
+		--exclude='data/' \
 		--exclude='.DS_Store' \
 		--exclude='venv' \
+		--exclude='venv/' \
+		--exclude='config' \
+		--exclude='config/' \
+		--exclude='logs' \
+		--exclude='logs/' \
 		./ $(REMOTE_HOST):$(INSTALL_DIR)/
 	@echo ""
 	@echo "$(GREEN)Sync complete!$(NC)"
@@ -124,15 +129,17 @@ install:
 	sudo bash scripts/install.sh
 
 start:
-	@echo "$(GREEN)Starting tracker service...$(NC)"
+	@echo "$(GREEN)Starting and enabling tracker service...$(NC)"
 	sudo systemctl start utilization-tracker
-	@echo "$(GREEN)Service started$(NC)"
+	sudo systemctl enable utilization-tracker
+	@echo "$(GREEN)Service started and enabled at boot$(NC)"
 	@$(MAKE) status
 
 stop:
-	@echo "$(YELLOW)Stopping tracker service...$(NC)"
+	@echo "$(YELLOW)Stopping and disabling tracker service...$(NC)"
 	sudo systemctl stop utilization-tracker
-	@echo "$(YELLOW)Service stopped$(NC)"
+	sudo systemctl disable utilization-tracker
+	@echo "$(YELLOW)Service stopped and disabled at boot$(NC)"
 
 restart:
 	@echo "$(YELLOW)Restarting tracker service...$(NC)"
@@ -143,16 +150,6 @@ restart:
 status:
 	@echo "$(GREEN)Service Status:$(NC)"
 	@sudo systemctl status utilization-tracker --no-pager || true
-
-enable:
-	@echo "$(GREEN)Enabling tracker service at boot...$(NC)"
-	sudo systemctl enable utilization-tracker
-	@echo "$(GREEN)Service enabled$(NC)"
-
-disable:
-	@echo "$(YELLOW)Disabling tracker service at boot...$(NC)"
-	sudo systemctl disable utilization-tracker
-	@echo "$(YELLOW)Service disabled$(NC)"
 
 logs:
 	@echo "$(GREEN)Streaming logs (Ctrl+C to exit)...$(NC)"
@@ -209,6 +206,7 @@ config:
 	@echo ""
 	@echo "Installation Paths:"
 	@echo "  Install Dir:   $(YELLOW)$(INSTALL_DIR)$(NC)"
+	@echo "  Venv Dir:      $(YELLOW)$(VENV_DIR)$(NC)"
 	@echo "  Config Dir:    $(YELLOW)$(CONFIG_DIR)$(NC)"
 	@echo "  Data Dir:      $(YELLOW)$(DATA_DIR)$(NC)"
 	@echo "  Log Dir:       $(YELLOW)$(LOG_DIR)$(NC)"
@@ -219,7 +217,7 @@ config:
 	@echo "Edit $(YELLOW)config.yaml$(NC) to change these settings"
 
 # Quick setup target (run on server after deploying)
-setup: install start enable
+setup: install start
 	@echo ""
 	@echo "$(GREEN)================================$(NC)"
 	@echo "$(GREEN)Setup Complete!$(NC)"
@@ -227,8 +225,7 @@ setup: install start enable
 	@echo ""
 	@echo "The tracker is now:"
 	@echo "  ✓ Installed"
-	@echo "  ✓ Running"
-	@echo "  ✓ Enabled at boot"
+	@echo "  ✓ Running and enabled at boot"
 	@echo ""
 	@echo "Useful commands:"
 	@echo "  $(YELLOW)make status$(NC)  - Check status"
@@ -239,9 +236,11 @@ setup: install start enable
 # Install Python dependencies (uses venv if it exists)
 install-deps:
 	@echo "$(GREEN)Installing Python dependencies...$(NC)"
-	@if [ -d "$(INSTALL_DIR)/venv" ]; then \
-		echo "$(GREEN)Using virtual environment at $(INSTALL_DIR)/venv$(NC)"; \
-		sudo $(INSTALL_DIR)/venv/bin/pip install -r requirements.txt; \
+	@VENV_PATH="$(VENV_DIR)"; \
+	if [ -z "$$VENV_PATH" ]; then VENV_PATH="$(INSTALL_DIR)/venv"; fi; \
+	if [ -d "$$VENV_PATH" ]; then \
+		echo "$(GREEN)Using virtual environment at $$VENV_PATH$(NC)"; \
+		sudo $$VENV_PATH/bin/pip install -r requirements.txt; \
 	elif command -v pip3 >/dev/null 2>&1; then \
 		echo "$(YELLOW)No venv found, installing system-wide...$(NC)"; \
 		sudo pip3 install -r requirements.txt 2>/dev/null || { \
