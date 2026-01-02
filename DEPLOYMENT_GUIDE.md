@@ -81,6 +81,8 @@ After deploying, SSH to your server (`ssh user@your-server.com`) and run these c
 | `make logs-tail`    | View last 50 log lines                                |
 | `make logs-failed`  | View logs when service failed to start                |
 | `make query`        | Display current metrics                               |
+| `make query AVG=30` | Display metrics + 30-minute averages                  |
+| `make query MAX=5`  | Display metrics + 5-minute maximums                   |
 | `make disk-usage`   | Check database size                                   |
 
 #### Configuration Changes

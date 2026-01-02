@@ -70,6 +70,12 @@ make logs-tail
 # Query and display current metrics
 make query
 
+# Show averages over last 30 minutes
+make query AVG=30
+
+# Show maximums over last 5 minutes
+make query MAX=5
+
 # Check database size
 make disk-usage
 ```
@@ -114,8 +120,14 @@ make logs-tail
 # See live activity
 make logs
 
-# View collected metrics
+# View current metrics
 make query
+
+# View averages over last 30 minutes
+make query AVG=30
+
+# View maximums over last 5 minutes
+make query MAX=5
 ```
 
 ### Update the Code

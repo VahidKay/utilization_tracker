@@ -68,10 +68,12 @@ make sync       # Sync local changes to remote (from local machine)
 **Common commands (run on server):**
 
 ```bash
-make status     # Check if running
-make logs       # View live logs
-make query      # See collected metrics
-make restart    # Restart service
+make status        # Check if running
+make logs          # View live logs
+make query         # See current metrics
+make query AVG=30  # See 30-minute averages
+make query MAX=5   # See 5-minute maximums
+make restart       # Restart service
 ```
 
 See [MAKEFILE_GUIDE.md](MAKEFILE_GUIDE.md) for all commands.

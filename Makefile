@@ -63,6 +63,7 @@ help:
 	@echo "  $(YELLOW)make logs-failed$(NC)     - View failure logs"
 	@echo "  $(YELLOW)make query$(NC)           - Display current metrics"
 	@echo "  $(YELLOW)make query AVG=30$(NC)    - Display metrics + 30min averages"
+	@echo "  $(YELLOW)make query MAX=5$(NC)     - Display metrics + 5min maximums"
 	@echo "  $(YELLOW)make disk-usage$(NC)      - Check database size"
 	@echo ""
 	@echo "Configuration & Maintenance:"
@@ -185,6 +186,8 @@ query: check-server
 	@echo "$(GREEN)Querying metrics...$(NC)"
 	@if [ -n "$(AVG)" ]; then \
 		echo "$(YELLOW)(Showing averages over last $(AVG) minutes)$(NC)"; \
+	elif [ -n "$(MAX)" ]; then \
+		echo "$(YELLOW)(Showing maximums over last $(MAX) minutes)$(NC)"; \
 	fi
 	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
 	VENV_DIR_EXPANDED=$$(echo "$(VENV_DIR)" | sed "s|^~|$$HOME|"); \
@@ -197,13 +200,17 @@ query: check-server
 	fi; \
 	if [ -d "$$VENV_DIR_EXPANDED" ]; then \
 		if [ -n "$(AVG)" ]; then \
-			$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED $(AVG); \
+			$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED $(AVG) AVG; \
+		elif [ -n "$(MAX)" ]; then \
+			$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED $(MAX) MAX; \
 		else \
 			$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED; \
 		fi; \
 	else \
 		if [ -n "$(AVG)" ]; then \
-			python3 scripts/query.py $$DB_PATH_EXPANDED $(AVG); \
+			python3 scripts/query.py $$DB_PATH_EXPANDED $(AVG) AVG; \
+		elif [ -n "$(MAX)" ]; then \
+			python3 scripts/query.py $$DB_PATH_EXPANDED $(MAX) MAX; \
 		else \
 			python3 scripts/query.py $$DB_PATH_EXPANDED; \
 		fi; \

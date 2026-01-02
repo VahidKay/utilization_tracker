@@ -51,6 +51,8 @@ make sync          # Quick sync changed files (faster, for development)
 make logs          # Live logs (Ctrl+C to exit)
 make logs-tail     # Last 50 lines
 make query         # Current metrics
+make query AVG=30  # 30-minute averages
+make query MAX=5   # 5-minute maximums
 make disk-usage    # Database size
 ```
 

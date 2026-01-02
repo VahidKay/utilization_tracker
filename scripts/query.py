@@ -10,19 +10,19 @@ from datetime import datetime, timedelta
 # DATABASE QUERY FUNCTIONS
 # ============================================================================
 
-def fetch_system_metrics(cursor, avg_minutes=None):
+def fetch_system_metrics(cursor, agg_minutes=None, agg_func='AVG'):
     """Fetch system metrics from database.
 
     Returns list of tuples: (time_label, cpu_percent, memory_percent, load_avg_1)
     """
-    if avg_minutes:
-        cutoff_time = (datetime.now() - timedelta(minutes=avg_minutes)).isoformat()
-        cursor.execute("""
+    if agg_minutes:
+        cutoff_time = (datetime.now() - timedelta(minutes=agg_minutes)).isoformat()
+        cursor.execute(f"""
             SELECT
                 datetime('now', 'localtime') as time,
-                AVG(cpu_percent) as avg_cpu,
-                AVG(memory_percent) as avg_memory,
-                AVG(load_avg_1) as avg_load
+                {agg_func}(cpu_percent) as agg_cpu,
+                {agg_func}(memory_percent) as agg_memory,
+                {agg_func}(load_avg_1) as agg_load
             FROM system_metrics
             WHERE timestamp >= ?
         """, (cutoff_time,))
@@ -44,20 +44,20 @@ def fetch_system_metrics(cursor, avg_minutes=None):
         """)
         return cursor.fetchall()
 
-def fetch_disk_metrics(cursor, avg_minutes=None):
+def fetch_disk_metrics(cursor, agg_minutes=None, agg_func='AVG'):
     """Fetch disk metrics from database.
 
     Returns list of tuples: (mountpoint, used_percent, total_gb, used_gb, free_gb)
     """
-    if avg_minutes:
-        cutoff_time = (datetime.now() - timedelta(minutes=avg_minutes)).isoformat()
-        cursor.execute("""
+    if agg_minutes:
+        cutoff_time = (datetime.now() - timedelta(minutes=agg_minutes)).isoformat()
+        cursor.execute(f"""
             SELECT
                 mountpoint,
-                AVG(percent) as avg_percent,
-                AVG(total) / 1073741824.0 as avg_total_gb,
-                AVG(used) / 1073741824.0 as avg_used_gb,
-                AVG(free) / 1073741824.0 as avg_free_gb
+                {agg_func}(percent) as agg_percent,
+                {agg_func}(total) / 1073741824.0 as agg_total_gb,
+                {agg_func}(used) / 1073741824.0 as agg_used_gb,
+                {agg_func}(free) / 1073741824.0 as agg_free_gb
             FROM disk_metrics
             WHERE timestamp >= ?
             GROUP BY mountpoint
@@ -81,18 +81,18 @@ def fetch_disk_metrics(cursor, avg_minutes=None):
         """)
     return cursor.fetchall()
 
-def fetch_temperature_metrics(cursor, avg_minutes=None):
+def fetch_temperature_metrics(cursor, agg_minutes=None, agg_func='AVG'):
     """Fetch temperature metrics from database.
 
     Returns list of tuples: (sensor_name, label, temperature_celsius)
     """
-    if avg_minutes:
-        cutoff_time = (datetime.now() - timedelta(minutes=avg_minutes)).isoformat()
-        cursor.execute("""
+    if agg_minutes:
+        cutoff_time = (datetime.now() - timedelta(minutes=agg_minutes)).isoformat()
+        cursor.execute(f"""
             SELECT
                 sensor_name,
                 label,
-                AVG(current) as avg_temperature
+                {agg_func}(current) as agg_temperature
             FROM temperature_metrics
             WHERE timestamp >= ?
             GROUP BY sensor_name, label
@@ -116,25 +116,25 @@ def fetch_temperature_metrics(cursor, avg_minutes=None):
         """)
     return cursor.fetchall()
 
-def fetch_gpu_metrics(cursor, avg_minutes=None):
+def fetch_gpu_metrics(cursor, agg_minutes=None, agg_func='AVG'):
     """Fetch GPU metrics from database.
 
     Returns list of tuples: (gpu_index, gpu_name, gpu_utilization, memory_utilization,
                              memory_used_gb, memory_total_gb, temperature, power_draw, fan_speed)
     """
-    if avg_minutes:
-        cutoff_time = (datetime.now() - timedelta(minutes=avg_minutes)).isoformat()
-        cursor.execute("""
+    if agg_minutes:
+        cutoff_time = (datetime.now() - timedelta(minutes=agg_minutes)).isoformat()
+        cursor.execute(f"""
             SELECT
                 gpu_index,
                 gpu_name,
-                AVG(gpu_utilization) as avg_gpu,
-                AVG(memory_utilization) as avg_mem,
-                AVG(memory_used) / 1073741824.0 as avg_mem_used_gb,
-                AVG(memory_total) / 1073741824.0 as avg_mem_total_gb,
-                AVG(temperature) as avg_temp,
-                AVG(power_draw) as avg_power,
-                AVG(fan_speed) as avg_fan
+                {agg_func}(gpu_utilization) as agg_gpu,
+                {agg_func}(memory_utilization) as agg_mem,
+                {agg_func}(memory_used) / 1073741824.0 as agg_mem_used_gb,
+                {agg_func}(memory_total) / 1073741824.0 as agg_mem_total_gb,
+                {agg_func}(temperature) as agg_temp,
+                {agg_func}(power_draw) as agg_power,
+                {agg_func}(fan_speed) as agg_fan
             FROM gpu_metrics
             WHERE timestamp >= ?
             GROUP BY gpu_index, gpu_name
@@ -236,17 +236,17 @@ def print_gpu_metrics(data):
 # MAIN QUERY FUNCTION
 # ============================================================================
 
-def query_metrics(db_path, avg_minutes=None):
+def query_metrics(db_path, agg_minutes=None, agg_func='AVG'):
     """Query and display recent metrics."""
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
         # Fetch all data
-        system_data = fetch_system_metrics(cursor, avg_minutes)
-        disk_data = fetch_disk_metrics(cursor, avg_minutes)
-        temp_data = fetch_temperature_metrics(cursor, avg_minutes)
-        gpu_data = fetch_gpu_metrics(cursor, avg_minutes)
+        system_data = fetch_system_metrics(cursor, agg_minutes, agg_func)
+        disk_data = fetch_disk_metrics(cursor, agg_minutes, agg_func)
+        temp_data = fetch_temperature_metrics(cursor, agg_minutes, agg_func)
+        gpu_data = fetch_gpu_metrics(cursor, agg_minutes, agg_func)
 
         conn.close()
 
@@ -265,16 +265,23 @@ def query_metrics(db_path, avg_minutes=None):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: query.py <db_path> [avg_minutes]", file=sys.stderr)
+        print("Usage: query.py <db_path> [agg_minutes] [agg_func]", file=sys.stderr)
         print("  db_path      - Path to the database file", file=sys.stderr)
-        print("  avg_minutes  - Show averages over last X minutes (optional)", file=sys.stderr)
+        print("  agg_minutes  - Show aggregates over last X minutes (optional)", file=sys.stderr)
+        print("  agg_func     - Aggregation function: AVG or MAX (optional, default: AVG)", file=sys.stderr)
         sys.exit(1)
 
     db_path = sys.argv[1]
-    avg_minutes = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    agg_minutes = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    agg_func = sys.argv[3].upper() if len(sys.argv) > 3 else 'AVG'
+
+    # Validate aggregation function
+    if agg_func not in ['AVG', 'MAX']:
+        print(f"Error: Invalid aggregation function '{agg_func}'. Must be AVG or MAX.", file=sys.stderr)
+        sys.exit(1)
 
     if not os.path.exists(db_path):
         print(f"Database file not found: {db_path}", file=sys.stderr)
         sys.exit(1)
 
-    query_metrics(db_path, avg_minutes)
+    query_metrics(db_path, agg_minutes, agg_func)
