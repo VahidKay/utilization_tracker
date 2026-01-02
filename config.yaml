@@ -2,7 +2,7 @@
 
 # Remote server connection (used by Makefile commands)
 # Format: user@hostname or user@ip-address
-remote_host: "user@your-server.com"
+remote_host: "server"
 ssh_port: 22
 
 # Data collection interval in seconds
