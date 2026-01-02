@@ -1,5 +1,5 @@
-.PHONY: help deploy sync install start stop restart status logs logs-tail \
-        logs-failed query clean monitor verify view-data change-interval install-deps \
+.PHONY: help deploy sync install start stop restart status enable disable logs logs-tail \
+        logs-failed query clean monitor verify view-data change-interval \
         check-config check-server config test-connection backup-db download-db disk-usage setup
 
 # Read configuration from config.yaml
@@ -44,14 +44,15 @@ help:
 	@echo "$(GREEN)═══ SERVER COMMANDS (SSH required) ═══$(NC)"
 	@echo ""
 	@echo "Installation (run once on server):"
-	@echo "  $(YELLOW)make install$(NC)      - Install tracker and dependencies"
-	@echo "  $(YELLOW)make install-deps$(NC) - Install Python dependencies only"
+	@echo "  $(YELLOW)make install$(NC) - Install tracker, dependencies, and systemd service"
 	@echo ""
 	@echo "Service Management:"
-	@echo "  $(YELLOW)make start$(NC)   - Start service and enable at boot"
-	@echo "  $(YELLOW)make stop$(NC)    - Stop service and disable at boot"
+	@echo "  $(YELLOW)make start$(NC)   - Start the service"
+	@echo "  $(YELLOW)make stop$(NC)    - Stop the service"
 	@echo "  $(YELLOW)make restart$(NC) - Restart the service"
 	@echo "  $(YELLOW)make status$(NC)  - Check service status"
+	@echo "  $(YELLOW)make enable$(NC)  - Enable service at boot"
+	@echo "  $(YELLOW)make disable$(NC) - Disable service at boot"
 	@echo ""
 	@echo "Monitoring:"
 	@echo "  $(YELLOW)make monitor$(NC)      - Live monitoring (every 60s)"
@@ -72,7 +73,7 @@ help:
 	@echo "  2. $(YELLOW)[Local]$(NC)  make deploy"
 	@echo "  3. $(YELLOW)[Local]$(NC)  ssh $(REMOTE_HOST)"
 	@echo "  4. $(YELLOW)[Server]$(NC) cd $(INSTALL_DIR) && make install"
-	@echo "  5. $(YELLOW)[Server]$(NC) make start"
+	@echo "  5. $(YELLOW)[Server]$(NC) make start && make enable"
 	@echo "  6. $(YELLOW)[Server]$(NC) make verify"
 
 check-config:
@@ -141,23 +142,31 @@ install: check-server
 	sudo bash scripts/install.sh
 
 start: check-server
-	@echo "$(GREEN)Starting and enabling tracker service...$(NC)"
+	@echo "$(GREEN)Starting tracker service...$(NC)"
 	sudo systemctl start utilization-tracker
-	sudo systemctl enable utilization-tracker
-	@echo "$(GREEN)Service started and enabled at boot$(NC)"
+	@echo "$(GREEN)Service started$(NC)"
 	@$(MAKE) status
 
 stop: check-server
-	@echo "$(YELLOW)Stopping and disabling tracker service...$(NC)"
+	@echo "$(YELLOW)Stopping tracker service...$(NC)"
 	sudo systemctl stop utilization-tracker
-	sudo systemctl disable utilization-tracker
-	@echo "$(YELLOW)Service stopped and disabled at boot$(NC)"
+	@echo "$(YELLOW)Service stopped$(NC)"
 
 restart: check-server
 	@echo "$(YELLOW)Restarting tracker service...$(NC)"
 	sudo systemctl restart utilization-tracker
 	@echo "$(GREEN)Service restarted$(NC)"
 	@$(MAKE) status
+
+enable: check-server
+	@echo "$(GREEN)Enabling tracker service at boot...$(NC)"
+	sudo systemctl enable utilization-tracker
+	@echo "$(GREEN)Service enabled at boot$(NC)"
+
+disable: check-server
+	@echo "$(YELLOW)Disabling tracker service at boot...$(NC)"
+	sudo systemctl disable utilization-tracker
+	@echo "$(YELLOW)Service disabled at boot$(NC)"
 
 status: check-server
 	@echo "$(GREEN)Service Status:$(NC)"
@@ -173,19 +182,26 @@ logs-tail: check-server
 
 query: check-server
 	@echo "$(GREEN)Querying metrics...$(NC)"
-	@echo "$(YELLOW)Database path: $(DB_PATH)$(NC)"
-	@if [ ! -f "$(DB_PATH)" ]; then \
-		echo "$(RED)Database file not found at: $(DB_PATH)$(NC)"; \
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	VENV_DIR_EXPANDED=$$(echo "$(VENV_DIR)" | sed "s|^~|$$HOME|"); \
+	if [ ! -f "$$DB_PATH_EXPANDED" ]; then \
+		echo "$(RED)Database file not found at: $$DB_PATH_EXPANDED$(NC)"; \
 		echo "$(YELLOW)Checking if service created database elsewhere...$(NC)"; \
-		find $(INSTALL_DIR) -name "*.db" 2>/dev/null || echo "No database files found"; \
+		INSTALL_DIR_EXPANDED=$$(echo "$(INSTALL_DIR)" | sed "s|^~|$$HOME|"); \
+		find $$INSTALL_DIR_EXPANDED -name "*.db" 2>/dev/null || echo "No database files found"; \
 		exit 1; \
+	fi; \
+	if [ -d "$$VENV_DIR_EXPANDED" ]; then \
+		$$VENV_DIR_EXPANDED/bin/python3 scripts/query.py $$DB_PATH_EXPANDED 10; \
+	else \
+		python3 scripts/query.py $$DB_PATH_EXPANDED 10; \
 	fi
-	@sqlite3 $(DB_PATH) "SELECT datetime(timestamp) as time, cpu_percent, memory_percent, load_avg_1 FROM system_metrics ORDER BY timestamp DESC LIMIT 10;"
 
 disk-usage: check-server
 	@echo "$(GREEN)Database disk usage:$(NC)"
-	@sudo du -h $(DB_PATH)
-	@sudo sqlite3 $(DB_PATH) "SELECT COUNT(*) as system_records FROM system_metrics; SELECT COUNT(*) as disk_records FROM disk_metrics;"
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	sudo du -h $$DB_PATH_EXPANDED; \
+	sudo sqlite3 $$DB_PATH_EXPANDED "SELECT COUNT(*) as system_records FROM system_metrics; SELECT COUNT(*) as disk_records FROM disk_metrics;"
 
 download-db: check-config
 	@echo "$(GREEN)Downloading database from $(REMOTE_HOST)...$(NC)"
@@ -195,8 +211,10 @@ download-db: check-config
 
 backup-db: check-server
 	@echo "$(GREEN)Creating database backup...$(NC)"
-	@sudo cp $(DB_PATH) $(DATA_DIR)/metrics-backup-$$(date +%Y%m%d-%H%M%S).db
-	@sudo ls -lh $(DATA_DIR)/metrics-backup-*.db | tail -5
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	DATA_DIR_EXPANDED=$$(echo "$(DATA_DIR)" | sed "s|^~|$$HOME|"); \
+	sudo cp $$DB_PATH_EXPANDED $$DATA_DIR_EXPANDED/metrics-backup-$$(date +%Y%m%d-%H%M%S).db; \
+	sudo ls -lh $$DATA_DIR_EXPANDED/metrics-backup-*.db | tail -5
 
 test-connection: check-config
 	@echo "$(GREEN)Testing SSH connection to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
@@ -234,7 +252,7 @@ config:
 	@echo "Edit $(YELLOW)config.yaml$(NC) to change these settings"
 
 # Quick setup target (run on server after deploying)
-setup: install start
+setup: install start enable
 	@echo ""
 	@echo "$(GREEN)================================$(NC)"
 	@echo "$(GREEN)Setup Complete!$(NC)"
@@ -242,7 +260,8 @@ setup: install start
 	@echo ""
 	@echo "The tracker is now:"
 	@echo "  ✓ Installed"
-	@echo "  ✓ Running and enabled at boot"
+	@echo "  ✓ Running"
+	@echo "  ✓ Enabled at boot"
 	@echo ""
 	@echo "Useful commands:"
 	@echo "  $(YELLOW)make status$(NC)  - Check status"
@@ -250,31 +269,13 @@ setup: install start
 	@echo "  $(YELLOW)make query$(NC)   - View metrics"
 	@echo ""
 
-# Install Python dependencies (uses venv if it exists)
-install-deps: check-server
-	@echo "$(GREEN)Installing Python dependencies...$(NC)"
-	@VENV_PATH="$(VENV_DIR)"; \
-	if [ -z "$$VENV_PATH" ]; then VENV_PATH="$(INSTALL_DIR)/venv"; fi; \
-	if [ -d "$$VENV_PATH" ]; then \
-		echo "$(GREEN)Using virtual environment at $$VENV_PATH$(NC)"; \
-		sudo $$VENV_PATH/bin/pip install -r requirements.txt; \
-	elif command -v pip3 >/dev/null 2>&1; then \
-		echo "$(YELLOW)No venv found, installing system-wide...$(NC)"; \
-		sudo pip3 install -r requirements.txt 2>/dev/null || { \
-			echo "$(YELLOW)pip3 install failed, trying apt...$(NC)"; \
-			sudo apt update && sudo apt install -y python3-psutil python3-yaml; \
-		}; \
-	else \
-		echo "$(YELLOW)pip3 not found, trying apt...$(NC)"; \
-		sudo apt update && sudo apt install -y python3-psutil python3-yaml; \
-	fi
-	@echo "$(GREEN)Dependencies installed$(NC)"
 
 # Start live monitoring (refreshes every 60 seconds)
 monitor: check-server
 	@echo "$(GREEN)Starting live monitoring (Ctrl+C to exit)...$(NC)"
 	@echo ""
-	@while true; do \
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	while true; do \
 		clear; \
 		echo "$(GREEN)=== Utilization Tracker - Live Monitor ===$(NC)"; \
 		echo ""; \
@@ -282,10 +283,10 @@ monitor: check-server
 		sudo systemctl is-active utilization-tracker --quiet && echo "  ✓ Running" || echo "  ✗ Stopped"; \
 		echo ""; \
 		echo "$(YELLOW)Latest Metrics:$(NC)"; \
-		sudo sqlite3 $(DB_PATH) "SELECT datetime(timestamp, 'localtime') as time, cpu_percent || '%' as cpu, memory_percent || '%' as memory, load_avg_1 as load FROM system_metrics ORDER BY timestamp DESC LIMIT 1;" 2>/dev/null || echo "  No data available"; \
+		sudo sqlite3 $$DB_PATH_EXPANDED "SELECT datetime(timestamp, 'localtime') as time, cpu_percent || '%' as cpu, memory_percent || '%' as memory, load_avg_1 as load FROM system_metrics ORDER BY timestamp DESC LIMIT 1;" 2>/dev/null || echo "  No data available"; \
 		echo ""; \
 		echo "$(YELLOW)Recent Activity (last 5 entries):$(NC)"; \
-		sudo sqlite3 $(DB_PATH) "SELECT datetime(timestamp, 'localtime') as time, cpu_percent || '%' as cpu, memory_percent || '%' as mem FROM system_metrics ORDER BY timestamp DESC LIMIT 5;" 2>/dev/null || echo "  No data available"; \
+		sudo sqlite3 $$DB_PATH_EXPANDED "SELECT datetime(timestamp, 'localtime') as time, cpu_percent || '%' as cpu, memory_percent || '%' as mem FROM system_metrics ORDER BY timestamp DESC LIMIT 5;" 2>/dev/null || echo "  No data available"; \
 		echo ""; \
 		echo "Press Ctrl+C to exit"; \
 		sleep 60; \
@@ -304,18 +305,20 @@ verify: check-server
 	fi
 	@echo ""
 	@echo "$(YELLOW)2. Checking database...$(NC)"
-	@if [ -f "$(DB_PATH)" ]; then \
-		echo "   ✓ Database exists at $(DB_PATH)"; \
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	if [ -f "$$DB_PATH_EXPANDED" ]; then \
+		echo "   ✓ Database exists at $$DB_PATH_EXPANDED"; \
 	else \
-		echo "   ✗ Database not found at $(DB_PATH)"; \
+		echo "   ✗ Database not found at $$DB_PATH_EXPANDED"; \
 		exit 1; \
 	fi
 	@echo ""
 	@echo "$(YELLOW)3. Checking recent data collection...$(NC)"
-	@LATEST=$$(sudo sqlite3 $(DB_PATH) "SELECT MAX(timestamp) FROM system_metrics;" 2>/dev/null); \
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	LATEST=$$(sudo sqlite3 $$DB_PATH_EXPANDED "SELECT MAX(timestamp) FROM system_metrics;" 2>/dev/null); \
 	if [ -n "$$LATEST" ]; then \
 		echo "   ✓ Latest data: $$LATEST"; \
-		RECORD_COUNT=$$(sudo sqlite3 $(DB_PATH) "SELECT COUNT(*) FROM system_metrics;" 2>/dev/null); \
+		RECORD_COUNT=$$(sudo sqlite3 $$DB_PATH_EXPANDED "SELECT COUNT(*) FROM system_metrics;" 2>/dev/null); \
 		echo "   ✓ Total records: $$RECORD_COUNT"; \
 	else \
 		echo "   ✗ No data found in database"; \
@@ -323,12 +326,13 @@ verify: check-server
 	fi
 	@echo ""
 	@echo "$(YELLOW)4. Checking log file...$(NC)"
-	@if [ -f "$(LOG_PATH)" ]; then \
-		echo "   ✓ Log file exists at $(LOG_PATH)"; \
-		ERRORS=$$(sudo grep -c ERROR $(LOG_PATH) 2>/dev/null || echo 0); \
+	@LOG_PATH_EXPANDED=$$(echo "$(LOG_PATH)" | sed "s|^~|$$HOME|"); \
+	if [ -f "$$LOG_PATH_EXPANDED" ]; then \
+		echo "   ✓ Log file exists at $$LOG_PATH_EXPANDED"; \
+		ERRORS=$$(sudo grep -c ERROR $$LOG_PATH_EXPANDED 2>/dev/null || echo 0); \
 		echo "   ℹ Error count: $$ERRORS"; \
 	else \
-		echo "   ⚠ Log file not found at $(LOG_PATH)"; \
+		echo "   ⚠ Log file not found at $$LOG_PATH_EXPANDED"; \
 	fi
 	@echo ""
 	@echo "$(GREEN)✓ Verification complete - tracker is working!$(NC)"
@@ -337,11 +341,13 @@ verify: check-server
 view-data: check-server
 	@echo "$(GREEN)Viewing collected metrics (last 20 entries)...$(NC)"
 	@echo ""
-	@echo "$(YELLOW)System Metrics:$(NC)"
-	@sudo sqlite3 -header -column $(DB_PATH) "SELECT datetime(timestamp, 'localtime') as Time, cpu_percent || '%' as CPU, memory_percent || '%' as Memory, load_avg_1 as Load_1m FROM system_metrics ORDER BY timestamp DESC LIMIT 20;" 2>/dev/null || echo "No data available"
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	echo "$(YELLOW)System Metrics:$(NC)"; \
+	sudo sqlite3 -header -column $$DB_PATH_EXPANDED "SELECT datetime(timestamp, 'localtime') as Time, cpu_percent || '%' as CPU, memory_percent || '%' as Memory, load_avg_1 as Load_1m FROM system_metrics ORDER BY timestamp DESC LIMIT 20;" 2>/dev/null || echo "No data available"
 	@echo ""
-	@echo "$(YELLOW)Disk Metrics (latest per mount):$(NC)"
-	@sudo sqlite3 -header -column $(DB_PATH) "SELECT datetime(timestamp, 'localtime') as Time, mount_point as Mount, used_percent || '%' as Used FROM disk_metrics WHERE timestamp IN (SELECT MAX(timestamp) FROM disk_metrics GROUP BY mount_point) ORDER BY mount_point LIMIT 10;" 2>/dev/null || echo "No disk data available"
+	@DB_PATH_EXPANDED=$$(echo "$(DB_PATH)" | sed "s|^~|$$HOME|"); \
+	echo "$(YELLOW)Disk Metrics (latest per mount):$(NC)"; \
+	sudo sqlite3 -header -column $$DB_PATH_EXPANDED "SELECT datetime(timestamp, 'localtime') as Time, mount_point as Mount, used_percent || '%' as Used FROM disk_metrics WHERE timestamp IN (SELECT MAX(timestamp) FROM disk_metrics GROUP BY mount_point) ORDER BY mount_point LIMIT 10;" 2>/dev/null || echo "No disk data available"
 	@echo ""
 	@echo "To view more data, use: $(YELLOW)make query$(NC) or directly query the database"
 
@@ -382,13 +388,14 @@ logs-failed: check-server
 	@sudo systemctl status utilization-tracker --no-pager --full
 	@echo ""
 	@echo "$(YELLOW)Last 20 lines from log file:$(NC)"
-	@if [ -f "$(LOG_PATH)" ]; then \
-		sudo tail -20 $(LOG_PATH); \
+	@LOG_PATH_EXPANDED=$$(echo "$(LOG_PATH)" | sed "s|^~|$$HOME|"); \
+	if [ -f "$$LOG_PATH_EXPANDED" ]; then \
+		sudo tail -20 $$LOG_PATH_EXPANDED; \
 	else \
-		echo "Log file not found at $(LOG_PATH)"; \
+		echo "Log file not found at $$LOG_PATH_EXPANDED"; \
 	fi
 	@echo ""
 	@echo "Common issues:"
-	@echo "  - Missing Python dependencies: $(YELLOW)make install-deps$(NC)"
+	@echo "  - Missing Python dependencies: $(YELLOW)make install$(NC) (reinstall)"
 	@echo "  - Permission errors: Check that service runs as root"
 	@echo "  - Config file errors: Check $(YELLOW)config.yaml$(NC) syntax"

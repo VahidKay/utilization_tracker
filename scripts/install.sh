@@ -55,10 +55,25 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-echo -e "${GREEN}[1/8] Creating directories...${NC}"
+echo -e "${GREEN}[1/9] Creating directories...${NC}"
 mkdir -p "$INSTALL_DIR/src"
 
-echo -e "${GREEN}[2/8] Creating Python virtual environment...${NC}"
+echo -e "${GREEN}[2/9] Copying application files...${NC}"
+# Only copy if we're not already in the install directory
+CURRENT_DIR=$(pwd)
+if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
+    cp -r src/* "$INSTALL_DIR/src/"
+    # Copy requirements.txt if it exists
+    if [ -f requirements.txt ]; then
+        cp requirements.txt "$INSTALL_DIR/"
+    fi
+else
+    echo "Already in install directory, skipping copy..."
+fi
+chmod +x "$INSTALL_DIR/src/tracker.py"
+chmod +x "$INSTALL_DIR/src/query_remote.py" 2>/dev/null || true
+
+echo -e "${GREEN}[3/9] Creating Python virtual environment...${NC}"
 # Remove old venv if it exists
 if [ -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}Removing old virtual environment...${NC}"
@@ -73,32 +88,36 @@ python3 -m venv "$VENV_DIR" || {
     python3 -m venv "$VENV_DIR"
 }
 
-echo -e "${GREEN}[3/8] Installing Python dependencies in venv...${NC}"
+echo -e "${GREEN}[4/9] Installing Python dependencies in venv...${NC}"
 "$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install psutil pyyaml || {
-    echo -e "${YELLOW}Warning: pip install failed, trying with apt...${NC}"
-    apt update
-    apt install -y python3-psutil python3-yaml
-}
 
-echo -e "${GREEN}[4/8] Copying application files...${NC}"
-# Only copy if we're not already in the install directory
-CURRENT_DIR=$(pwd)
-if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
-    cp -r src/* "$INSTALL_DIR/src/"
+# Install from requirements.txt if it exists in install directory
+if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+    "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt" || {
+        echo -e "${YELLOW}Warning: pip install from requirements.txt failed${NC}"
+        exit 1
+    }
 else
-    echo "Already in install directory, skipping copy..."
+    "$VENV_DIR/bin/pip" install psutil pyyaml || {
+        echo -e "${YELLOW}Warning: pip install failed, trying with apt...${NC}"
+        apt update
+        apt install -y python3-psutil python3-yaml
+    }
 fi
-chmod +x "$INSTALL_DIR/src/tracker.py"
-chmod +x "$INSTALL_DIR/src/query_remote.py" 2>/dev/null || true
 
-echo -e "${GREEN}[5/8] Ensuring configuration file exists...${NC}"
+echo -e "${GREEN}[5/9] Ensuring configuration file exists...${NC}"
 if [ ! -f "$INSTALL_DIR/config.yaml" ]; then
     echo -e "${YELLOW}Copying config.yaml to install directory...${NC}"
     cp config.yaml "$INSTALL_DIR/config.yaml"
 fi
 
-echo -e "${GREEN}[6/8] Installing systemd service...${NC}"
+echo -e "${GREEN}[6/9] Fixing permissions...${NC}"
+# Ensure the install directory is owned by the correct user
+if [ -n "$SUDO_USER" ]; then
+    chown -R "$SUDO_USER:$SUDO_USER" "$INSTALL_DIR"
+fi
+
+echo -e "${GREEN}[7/9] Installing systemd service...${NC}"
 # Create service file with correct Python path
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
@@ -118,10 +137,10 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-echo -e "${GREEN}[7/8] Reloading systemd daemon...${NC}"
+echo -e "${GREEN}[8/9] Reloading systemd daemon...${NC}"
 systemctl daemon-reload
 
-echo -e "${GREEN}[8/8] Setting up log rotation...${NC}"
+echo -e "${GREEN}[9/9] Setting up log rotation...${NC}"
 cat > /etc/logrotate.d/utilization-tracker <<EOF
 $INSTALL_DIR/logs/*.log {
     daily

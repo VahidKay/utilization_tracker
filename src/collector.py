@@ -3,7 +3,14 @@
 import psutil
 import logging
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+# Try to import GPU libraries
+try:
+    import pynvml
+    NVIDIA_GPU_AVAILABLE = True
+except ImportError:
+    NVIDIA_GPU_AVAILABLE = False
 
 
 class MetricsCollector:
@@ -12,6 +19,18 @@ class MetricsCollector:
     def __init__(self):
         """Initialize metrics collector."""
         self.logger = logging.getLogger(__name__)
+        self.nvidia_initialized = False
+
+        # Try to initialize NVIDIA GPU monitoring
+        if NVIDIA_GPU_AVAILABLE:
+            try:
+                pynvml.nvmlInit()
+                self.nvidia_initialized = True
+                self.gpu_count = pynvml.nvmlDeviceGetCount()
+                self.logger.info(f"NVIDIA GPU monitoring initialized: {self.gpu_count} GPU(s) detected")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize NVIDIA GPU monitoring: {e}")
+                self.nvidia_initialized = False
 
     def collect_system_metrics(self) -> Dict:
         """Collect CPU, memory, and load average metrics.
@@ -146,6 +165,87 @@ class MetricsCollector:
             self.logger.error(f"Error collecting temperature metrics: {e}")
             return []
 
+    def collect_gpu_metrics(self) -> List[Dict]:
+        """Collect GPU utilization and metrics if available.
+
+        Returns:
+            List of dictionaries containing GPU metrics
+        """
+        try:
+            timestamp = datetime.now().isoformat()
+            gpu_metrics = []
+
+            # NVIDIA GPUs
+            if self.nvidia_initialized:
+                try:
+                    for i in range(self.gpu_count):
+                        handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+
+                        # Get GPU name
+                        name = pynvml.nvmlDeviceGetName(handle)
+                        if isinstance(name, bytes):
+                            name = name.decode('utf-8')
+
+                        # Get utilization
+                        utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+
+                        # Get memory info
+                        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+
+                        # Get temperature
+                        try:
+                            temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                        except:
+                            temperature = None
+
+                        # Get power usage
+                        try:
+                            power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # Convert mW to W
+                        except:
+                            power = None
+
+                        # Get power limit
+                        try:
+                            power_limit = pynvml.nvmlDeviceGetPowerManagementLimit(handle) / 1000.0
+                        except:
+                            power_limit = None
+
+                        # Get fan speed
+                        try:
+                            fan_speed = pynvml.nvmlDeviceGetFanSpeed(handle)
+                        except:
+                            fan_speed = None
+
+                        metrics = {
+                            'timestamp': timestamp,
+                            'gpu_index': i,
+                            'gpu_name': name,
+                            'gpu_utilization': utilization.gpu,
+                            'memory_utilization': utilization.memory,
+                            'memory_total': memory.total,
+                            'memory_used': memory.used,
+                            'memory_free': memory.free,
+                            'temperature': temperature,
+                            'power_draw': power,
+                            'power_limit': power_limit,
+                            'fan_speed': fan_speed
+                        }
+
+                        gpu_metrics.append(metrics)
+                        self.logger.debug(
+                            f"GPU {i} ({name}): {utilization.gpu}% utilization, "
+                            f"{memory.used / memory.total * 100:.1f}% memory, {temperature}°C"
+                        )
+
+                except Exception as e:
+                    self.logger.warning(f"Error reading NVIDIA GPU metrics: {e}")
+
+            return gpu_metrics
+
+        except Exception as e:
+            self.logger.error(f"Error collecting GPU metrics: {e}")
+            return []
+
     def get_system_info(self) -> Dict:
         """Get static system information.
 
@@ -158,9 +258,18 @@ class MetricsCollector:
                 'cpu_count': psutil.cpu_count(logical=False),
                 'cpu_count_logical': psutil.cpu_count(logical=True),
                 'total_memory': psutil.virtual_memory().total,
-                'boot_time': datetime.fromtimestamp(psutil.boot_time()).isoformat()
+                'boot_time': datetime.fromtimestamp(psutil.boot_time()).isoformat(),
+                'gpu_count': self.gpu_count if self.nvidia_initialized else 0
             }
             return info
         except Exception as e:
             self.logger.error(f"Error collecting system info: {e}")
             return {}
+
+    def __del__(self):
+        """Cleanup GPU monitoring on destruction."""
+        if self.nvidia_initialized:
+            try:
+                pynvml.nvmlShutdown()
+            except:
+                pass

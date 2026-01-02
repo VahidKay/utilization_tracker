@@ -11,7 +11,7 @@ paths:
   venv_dir: "~/work/utilization-tracker/venv"  # Python virtual environment
 
 # Data collection interval in seconds
-collection_interval: 60
+collection_interval: 30
 
 # Database settings
 # Note: path is constructed as {install_dir}/data/metrics.db
@@ -33,6 +33,7 @@ metrics:
   disk: true
   load_average: true
   temperature: true
+  gpu: true  # NVIDIA GPU monitoring (requires nvidia-ml-py package)
 
 # Data retention (days)
 retention_days: 365

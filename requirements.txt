@@ -1,2 +1,3 @@
 psutil>=5.9.0
 pyyaml>=6.0
+nvidia-ml-py>=12.535.133  # For NVIDIA GPU monitoring

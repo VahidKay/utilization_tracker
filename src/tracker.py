@@ -117,6 +117,12 @@ class UtilizationTracker:
                 if temp_metrics:
                     self.db.insert_temperature_metrics(temp_metrics)
 
+            # Collect GPU metrics
+            if self.config.get('metrics.gpu'):
+                gpu_metrics = self.collector.collect_gpu_metrics()
+                if gpu_metrics:
+                    self.db.insert_gpu_metrics(gpu_metrics)
+
             self.logger.debug("Metrics collected and stored successfully")
 
         except Exception as e:

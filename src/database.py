@@ -97,6 +97,30 @@ class MetricsDatabase:
             ON temperature_metrics(timestamp)
         """)
 
+        # GPU metrics table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS gpu_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                gpu_index INTEGER NOT NULL,
+                gpu_name TEXT NOT NULL,
+                gpu_utilization REAL NOT NULL,
+                memory_utilization REAL NOT NULL,
+                memory_total INTEGER NOT NULL,
+                memory_used INTEGER NOT NULL,
+                memory_free INTEGER NOT NULL,
+                temperature REAL,
+                power_draw REAL,
+                power_limit REAL,
+                fan_speed REAL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_gpu_timestamp
+            ON gpu_metrics(timestamp)
+        """)
+
         self.conn.commit()
         self.logger.info("Database tables created/verified")
 
@@ -190,6 +214,41 @@ class MetricsDatabase:
             self.logger.error(f"Error inserting temperature metrics: {e}")
             raise
 
+    def insert_gpu_metrics(self, metrics_list: list):
+        """Insert GPU metrics into database.
+
+        Args:
+            metrics_list: List of GPU metric dictionaries
+        """
+        try:
+            cursor = self.conn.cursor()
+            for metrics in metrics_list:
+                cursor.execute("""
+                    INSERT INTO gpu_metrics (
+                        timestamp, gpu_index, gpu_name,
+                        gpu_utilization, memory_utilization,
+                        memory_total, memory_used, memory_free,
+                        temperature, power_draw, power_limit, fan_speed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    metrics['timestamp'],
+                    metrics['gpu_index'],
+                    metrics['gpu_name'],
+                    metrics['gpu_utilization'],
+                    metrics['memory_utilization'],
+                    metrics['memory_total'],
+                    metrics['memory_used'],
+                    metrics['memory_free'],
+                    metrics['temperature'],
+                    metrics['power_draw'],
+                    metrics['power_limit'],
+                    metrics['fan_speed']
+                ))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            self.logger.error(f"Error inserting GPU metrics: {e}")
+            raise
+
     def cleanup_old_data(self, retention_days: int):
         """Remove data older than retention period.
 
@@ -218,12 +277,19 @@ class MetricsDatabase:
             )
             deleted_temp = cursor.rowcount
 
+            cursor.execute(
+                "DELETE FROM gpu_metrics WHERE timestamp < ?",
+                (cutoff_date,)
+            )
+            deleted_gpu = cursor.rowcount
+
             self.conn.commit()
 
-            if deleted_system > 0 or deleted_disk > 0 or deleted_temp > 0:
+            if deleted_system > 0 or deleted_disk > 0 or deleted_temp > 0 or deleted_gpu > 0:
                 self.logger.info(
                     f"Cleaned up old data: {deleted_system} system records, "
-                    f"{deleted_disk} disk records, {deleted_temp} temperature records"
+                    f"{deleted_disk} disk records, {deleted_temp} temperature records, "
+                    f"{deleted_gpu} GPU records"
                 )
         except sqlite3.Error as e:
             self.logger.error(f"Error cleaning up old data: {e}")
