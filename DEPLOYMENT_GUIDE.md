@@ -128,15 +128,14 @@ After installation, files are located at:
 ├── venv/                          # Python virtual environment
 │   ├── bin/python3                # Python interpreter used by service
 │   └── lib/                       # Installed packages (psutil, pyyaml)
-├── config/                        # Configuration
-│   └── config.yaml
+├── config.yaml                    # Configuration file
 ├── data/                          # Database
 │   └── metrics.db
 └── logs/                          # Log files
     └── tracker.log
 ```
 
-These paths can be customized in [config.yaml](config.yaml).
+The install directory can be customized in [config.yaml](config.yaml) under `paths.install_dir`.
 
 **Important:** The tracker uses a Python virtual environment at `$INSTALL_DIR/venv` to avoid conflicts with system packages. The systemd service automatically uses the Python interpreter from this venv.
 
@@ -148,7 +147,7 @@ On the server:
 
 ```bash
 ssh user@your-server.com
-sudo nano /opt/utilization-tracker/config/config.yaml
+sudo nano /opt/utilization-tracker/config.yaml
 ```
 
 Or locally before deploying (edit [config.yaml](config.yaml)).
@@ -505,10 +504,10 @@ Edit [config.yaml](config.yaml) before deploying:
 ```yaml
 paths:
   install_dir: "/usr/local/utilization-tracker"
-  config_dir: "/usr/local/utilization-tracker/config"
-  data_dir: "/usr/local/utilization-tracker/data"
-  log_dir: "/usr/local/utilization-tracker/logs"
+  venv_dir: "/usr/local/utilization-tracker/venv"
 ```
+
+Data and logs will be created automatically at `install_dir/data/` and `install_dir/logs/`.
 
 ### Multiple Servers
 

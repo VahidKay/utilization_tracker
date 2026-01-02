@@ -9,20 +9,17 @@ ssh_port: 22
 paths:
   install_dir: "~/work/utilization-tracker"
   venv_dir: "~/work/utilization-tracker/venv"  # Python virtual environment
-  config_dir: "~/work/utilization-tracker/config"
-  data_dir: "~/work/utilization-tracker/data"
-  log_dir: "~/work/utilization-tracker/logs"
 
 # Data collection interval in seconds
 collection_interval: 60
 
 # Database settings
-# Note: path is constructed as {data_dir}/metrics.db
+# Note: path is constructed as {install_dir}/data/metrics.db
 database:
   filename: "metrics.db"
 
 # Logging settings
-# Note: path is constructed as {log_dir}/tracker.log
+# Note: path is constructed as {install_dir}/logs/tracker.log
 logging:
   filename: "tracker.log"
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR

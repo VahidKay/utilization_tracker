@@ -14,37 +14,41 @@ remote_host: "user@192.168.1.100"  # Change this to your server
 ssh_port: 22
 ```
 
-### 2. Quick Setup (All-in-One)
+### 2. Deploy to Server
 
 ```bash
-make setup
+# From your local machine
+make deploy
 ```
 
-This will:
-- Deploy the tracker to your server
-- Start the service
-- Enable it to run at boot
-- Show status
+Then SSH to the server and install:
+
+```bash
+ssh user@your-server.com
+cd /opt/utilization-tracker  # or your install_dir from config.yaml
+make install
+make start
+```
 
 ## Common Commands
 
 ### Deployment
 
 ```bash
-# First-time deployment
+# First-time deployment (from local machine)
 make deploy
 
-# Update existing installation (stops service, deploys, restarts)
-make redeploy
+# Quick sync changed files (from local machine, faster)
+make sync
 ```
 
 ### Service Management
 
 ```bash
-# Start the service
+# Start service and enable at boot
 make start
 
-# Stop the service
+# Stop service and disable at boot
 make stop
 
 # Restart the service
@@ -52,12 +56,6 @@ make restart
 
 # Check service status
 make status
-
-# Enable service at boot
-make enable
-
-# Disable service at boot
-make disable
 ```
 
 ### Monitoring
@@ -97,8 +95,8 @@ make clean
 # Deploy for the first time
 make deploy
 
-# Start and enable the service
-make start enable
+# Start and enable the service at boot
+make start
 
 # Check it's running
 make status
@@ -123,8 +121,13 @@ make query
 ### Update the Code
 
 ```bash
-# After making changes to the code
-make redeploy
+# After making changes to the code (from local machine)
+make sync
+
+# SSH to server and restart
+ssh user@your-server.com
+cd /opt/utilization-tracker
+make restart
 
 # Verify it restarted correctly
 make status
@@ -160,36 +163,53 @@ make download-db
 After editing [config.yaml](config.yaml) on your server:
 
 ```bash
-# Restart to apply changes
+# On the server, restart to apply changes
 make restart
 ```
 
-To update the config file on the server:
+To update the config file on the server from local:
 1. Edit your local `config.yaml`
-2. Run `make redeploy`
+2. Run `make sync` (from local machine)
+3. SSH to server and run `make restart`
 
 ## Command Reference
+
+### Local Machine Commands
+
+These commands can only be run from your local machine:
 
 | Command | Description |
 |---------|-------------|
 | `make help` | Show all available commands |
 | `make deploy` | Deploy to remote server |
-| `make redeploy` | Stop, redeploy, and restart |
-| `make start` | Start the service |
-| `make stop` | Stop the service |
+| `make sync` | Quick sync changed files (faster) |
+| `make download-db` | Download database from server |
+| `make test-connection` | Test SSH connection |
+| `make config` | Show full configuration |
+| `make clean` | Clean local temp files |
+
+### Server Commands
+
+These commands must be run on the server (after SSH):
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install tracker and dependencies |
+| `make install-deps` | Install Python dependencies only |
+| `make start` | Start service and enable at boot |
+| `make stop` | Stop service and disable at boot |
 | `make restart` | Restart the service |
 | `make status` | Check service status |
-| `make enable` | Enable at boot |
-| `make disable` | Disable at boot |
 | `make logs` | Stream live logs |
 | `make logs-tail` | Show last 50 logs |
+| `make logs-failed` | View failure logs |
 | `make query` | Display metrics |
 | `make disk-usage` | Check DB size |
-| `make download-db` | Download database |
-| `make backup-db` | Backup DB on server |
-| `make clean` | Clean local temp files |
-| `make setup` | Complete setup (deploy + start + enable) |
-| `make test-connection` | Test SSH connection |
+| `make monitor` | Live monitoring dashboard |
+| `make verify` | Verify tracker is working |
+| `make view-data` | View metrics (last 20) |
+| `make change-interval` | Change collection interval |
+| `make backup-db` | Backup database |
 
 ## Tips
 
@@ -198,7 +218,7 @@ To update the config file on the server:
 You can run multiple make commands in sequence:
 
 ```bash
-make deploy start enable status
+make deploy start status
 ```
 
 ### Use with Watch
@@ -217,16 +237,15 @@ make status && make query
 
 ### After Server Reboot
 
-Check if the service auto-started:
+The service should auto-start if enabled. Check status:
 
 ```bash
 make status
 ```
 
-If not enabled:
+If not running:
 
 ```bash
-make enable
 make start
 ```
 
@@ -257,14 +276,17 @@ Make sure you have:
 ### Service Won't Start
 
 ```bash
-# Check for errors
+# Check for errors (on server)
 make logs-tail
 
-# Try restarting
+# Try restarting (on server)
 make restart
 
-# If that fails, redeploy
-make redeploy
+# If that fails, sync from local and reinstall
+make sync  # from local machine
+# Then SSH to server:
+make install
+make start
 ```
 
 ## Advanced Usage
@@ -305,20 +327,21 @@ For multiple servers, you might want to create server-specific Makefiles.
 
 ## What Gets Deployed
 
-When you run `make deploy` or `make redeploy`, these files are transferred:
+When you run `make deploy` or `make sync`, these files are transferred:
 
 - `src/` - All Python source code
 - `config.yaml` - Configuration file
 - `requirements.txt` - Python dependencies
-- `install.sh` - Installation script
-- `systemd/utilization-tracker.service` - Systemd service file
+- `scripts/install.sh` - Installation script
+- `Makefile` - Make commands for server
 
-The installation script then:
-1. Creates directories
-2. Installs dependencies
-3. Copies files to `/opt/utilization-tracker/`
-4. Sets up systemd service
-5. Configures log rotation
+The installation script (`make install` on server) then:
+1. Creates install directory
+2. Creates Python virtual environment
+3. Installs dependencies (psutil, pyyaml) in venv
+4. Copies application files
+5. Sets up systemd service with TRACKER_BASE_DIR environment variable
+6. Configures log rotation
 
 ## Next Steps
 

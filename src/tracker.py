@@ -189,16 +189,17 @@ class UtilizationTracker:
 
 def main():
     """Entry point for the tracker."""
-    # Get config path from environment or use default
-    config_path = os.environ.get('TRACKER_CONFIG', '/opt/utilization-tracker/config/config.yaml')
+    # Get base directory from environment variable (set by systemd service)
+    base_dir = os.environ.get('TRACKER_BASE_DIR')
 
-    # If config doesn't exist at default location, look in current directory
+    if not base_dir:
+        # Fallback: use parent directory of script location for local development
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+    # Look for config.yaml in base directory
+    config_path = os.path.join(base_dir, 'config.yaml')
     if not os.path.exists(config_path):
-        local_config = os.path.join(os.path.dirname(__file__), '..', 'config.yaml')
-        if os.path.exists(local_config):
-            config_path = local_config
-        else:
-            config_path = None
+        raise ValueError(f"config.yaml not found at {config_path}")
 
     tracker = UtilizationTracker(config_path)
     tracker.run()

@@ -83,15 +83,15 @@ retention_days: 365
 
 ## File Locations (on server)
 
-All paths are configured in [config.yaml](config.yaml):
+All files are under the install_dir configured in [config.yaml](config.yaml):
 
 | Path | Description |
 |------|-------------|
-| `install_dir` (default: `/opt/utilization-tracker/`) | Application files |
-| `venv_dir` (default: `/opt/utilization-tracker/venv/`) | Python virtual environment |
-| `config_dir` (default: `/opt/utilization-tracker/config/`) | Configuration |
-| `data_dir` (default: `/opt/utilization-tracker/data/`) | Database |
-| `log_dir` (default: `/opt/utilization-tracker/logs/`) | Log files |
+| `install_dir` (default: `/opt/utilization-tracker/`) | Application files and config |
+| `install_dir/venv/` | Python virtual environment |
+| `install_dir/config.yaml` | Configuration file |
+| `install_dir/data/` | Database files |
+| `install_dir/logs/` | Log files |
 
 ## SSH Commands (alternative to make)
 

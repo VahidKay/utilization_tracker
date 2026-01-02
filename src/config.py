@@ -9,33 +9,6 @@ from typing import Dict, Any
 class Config:
     """Handles configuration loading and validation."""
 
-    DEFAULT_CONFIG = {
-        'collection_interval': 60,
-        'paths': {
-            'install_dir': '/opt/utilization-tracker',
-            'config_dir': '/etc/utilization-tracker',
-            'data_dir': '/var/lib/utilization-tracker',
-            'log_dir': '/var/log/utilization-tracker'
-        },
-        'database': {
-            'filename': 'metrics.db'
-        },
-        'logging': {
-            'filename': 'tracker.log',
-            'level': 'INFO',
-            'max_bytes': 10485760,
-            'backup_count': 5
-        },
-        'metrics': {
-            'cpu': True,
-            'memory': True,
-            'disk': True,
-            'load_average': True,
-            'temperature': True
-        },
-        'retention_days': 30
-    }
-
     def __init__(self, config_path: str = None):
         """Initialize configuration.
 
@@ -43,13 +16,13 @@ class Config:
             config_path: Path to YAML configuration file
         """
         self.config_path = config_path
-        self.config: Dict[str, Any] = self.DEFAULT_CONFIG.copy()
+        self.config: Dict[str, Any] = {}
         self.logger = logging.getLogger(__name__)
 
-        if config_path and os.path.exists(config_path):
-            self.load_config()
-        else:
-            self.logger.info("Using default configuration")
+        if not config_path or not os.path.exists(config_path):
+            raise ValueError(f"Configuration file not found: {config_path}")
+
+        self.load_config()
 
         # Construct full paths from directory + filename
         self._construct_paths()
@@ -58,13 +31,12 @@ class Config:
         """Load configuration from YAML file."""
         try:
             with open(self.config_path, 'r') as f:
-                user_config = yaml.safe_load(f)
+                self.config = yaml.safe_load(f)
 
-            if user_config:
-                self._merge_config(user_config)
-                self.logger.info(f"Configuration loaded from {self.config_path}")
-            else:
-                self.logger.warning(f"Empty config file, using defaults")
+            if not self.config:
+                raise ValueError("Configuration file is empty")
+
+            self.logger.info(f"Configuration loaded from {self.config_path}")
 
         except yaml.YAMLError as e:
             self.logger.error(f"Error parsing config file: {e}")
@@ -73,27 +45,27 @@ class Config:
             self.logger.error(f"Error loading config file: {e}")
             raise
 
-    def _merge_config(self, user_config: Dict[str, Any]):
-        """Merge user configuration with defaults.
-
-        Args:
-            user_config: User-provided configuration dictionary
-        """
-        for key, value in user_config.items():
-            if key in self.config and isinstance(self.config[key], dict) and isinstance(value, dict):
-                self.config[key].update(value)
-            else:
-                self.config[key] = value
-
     def _construct_paths(self):
-        """Construct full paths from directory + filename configuration."""
+        """Construct full paths from base directory."""
         import os
 
-        # Get directory paths
-        data_dir = self.get('paths.data_dir', '/var/lib/utilization-tracker')
-        log_dir = self.get('paths.log_dir', '/var/log/utilization-tracker')
+        # Get base directory from environment variable
+        base_dir = os.environ.get('TRACKER_BASE_DIR')
 
-        # Get filenames
+        if not base_dir:
+            # Fallback: use parent directory of config file location
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(self.config_path)))
+
+        # Construct data and log directories relative to base directory
+        data_dir = os.path.join(base_dir, 'data')
+        log_dir = os.path.join(base_dir, 'logs')
+
+        # Get filenames with defaults
+        if 'database' not in self.config:
+            self.config['database'] = {}
+        if 'logging' not in self.config:
+            self.config['logging'] = {}
+
         db_filename = self.get('database.filename', 'metrics.db')
         log_filename = self.get('logging.filename', 'tracker.log')
 

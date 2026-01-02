@@ -14,16 +14,10 @@ NC='\033[0m' # No Color
 if [ -f config.yaml ]; then
     INSTALL_DIR=$(grep "install_dir:" config.yaml | cut -d'"' -f2)
     VENV_DIR=$(grep "venv_dir:" config.yaml | cut -d'"' -f2)
-    CONFIG_DIR=$(grep "config_dir:" config.yaml | cut -d'"' -f2)
-    DATA_DIR=$(grep "data_dir:" config.yaml | cut -d'"' -f2)
-    LOG_DIR=$(grep "log_dir:" config.yaml | cut -d'"' -f2)
 else
     # Default configuration
     INSTALL_DIR="/opt/utilization-tracker"
     VENV_DIR="/opt/utilization-tracker/venv"
-    CONFIG_DIR="/etc/utilization-tracker"
-    DATA_DIR="/var/lib/utilization-tracker"
-    LOG_DIR="/var/log/utilization-tracker"
 fi
 
 # Expand tilde in paths (use SUDO_USER's home if running with sudo)
@@ -35,9 +29,6 @@ fi
 
 INSTALL_DIR="${INSTALL_DIR/#\~/$USER_HOME}"
 VENV_DIR="${VENV_DIR/#\~/$USER_HOME}"
-CONFIG_DIR="${CONFIG_DIR/#\~/$USER_HOME}"
-DATA_DIR="${DATA_DIR/#\~/$USER_HOME}"
-LOG_DIR="${LOG_DIR/#\~/$USER_HOME}"
 
 # Fallback: if venv_dir not specified, use install_dir/venv
 if [ -z "$VENV_DIR" ]; then
@@ -49,9 +40,6 @@ SERVICE_FILE="/etc/systemd/system/utilization-tracker.service"
 echo -e "${GREEN}=== Utilization Tracker Installation ===${NC}"
 echo -e "${GREEN}Install Directory: $INSTALL_DIR${NC}"
 echo -e "${GREEN}Venv Directory: $VENV_DIR${NC}"
-echo -e "${GREEN}Config Directory: $CONFIG_DIR${NC}"
-echo -e "${GREEN}Data Directory: $DATA_DIR${NC}"
-echo -e "${GREEN}Log Directory: $LOG_DIR${NC}"
 echo ""
 
 # Check if running as root
@@ -69,9 +57,6 @@ fi
 
 echo -e "${GREEN}[1/8] Creating directories...${NC}"
 mkdir -p "$INSTALL_DIR/src"
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$DATA_DIR"
-mkdir -p "$LOG_DIR"
 
 echo -e "${GREEN}[2/8] Creating Python virtual environment...${NC}"
 # Remove old venv if it exists
@@ -107,12 +92,11 @@ fi
 chmod +x "$INSTALL_DIR/src/tracker.py"
 chmod +x "$INSTALL_DIR/src/query_remote.py" 2>/dev/null || true
 
-echo -e "${GREEN}[5/8] Installing configuration file...${NC}"
-if [ -f "$CONFIG_DIR/config.yaml" ]; then
-    echo -e "${YELLOW}Configuration file already exists, creating backup...${NC}"
-    cp "$CONFIG_DIR/config.yaml" "$CONFIG_DIR/config.yaml.backup.$(date +%Y%m%d_%H%M%S)"
+echo -e "${GREEN}[5/8] Ensuring configuration file exists...${NC}"
+if [ ! -f "$INSTALL_DIR/config.yaml" ]; then
+    echo -e "${YELLOW}Copying config.yaml to install directory...${NC}"
+    cp config.yaml "$INSTALL_DIR/config.yaml"
 fi
-cp config.yaml "$CONFIG_DIR/config.yaml"
 
 echo -e "${GREEN}[6/8] Installing systemd service...${NC}"
 # Create service file with correct Python path
@@ -125,6 +109,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
+Environment="TRACKER_BASE_DIR=$INSTALL_DIR"
 ExecStart=$VENV_DIR/bin/python3 $INSTALL_DIR/src/tracker.py
 Restart=always
 RestartSec=10
@@ -138,7 +123,7 @@ systemctl daemon-reload
 
 echo -e "${GREEN}[8/8] Setting up log rotation...${NC}"
 cat > /etc/logrotate.d/utilization-tracker <<EOF
-$LOG_DIR/*.log {
+$INSTALL_DIR/logs/*.log {
     daily
     rotate 7
     compress
@@ -151,13 +136,14 @@ EOF
 
 echo -e "${GREEN}=== Installation Complete ===${NC}"
 echo ""
+echo -e "${GREEN}Install directory: $INSTALL_DIR${NC}"
 echo -e "${GREEN}Python virtual environment: $VENV_DIR${NC}"
-echo -e "${GREEN}Database location: $DATA_DIR/metrics.db${NC}"
-echo -e "${GREEN}Log location: $LOG_DIR/tracker.log${NC}"
+echo -e "${GREEN}Database location: $INSTALL_DIR/data/metrics.db${NC}"
+echo -e "${GREEN}Log location: $INSTALL_DIR/logs/tracker.log${NC}"
 echo ""
 echo "Next steps:"
 echo "1. Review and customize the configuration:"
-echo -e "   ${YELLOW}nano $CONFIG_DIR/config.yaml${NC}"
+echo -e "   ${YELLOW}nano $INSTALL_DIR/config.yaml${NC}"
 echo ""
 echo "2. Start the service (also enables at boot):"
 echo -e "   ${YELLOW}make start${NC}"
@@ -167,7 +153,7 @@ echo -e "   ${YELLOW}make status${NC}"
 echo ""
 echo "4. View logs:"
 echo -e "   ${YELLOW}make logs${NC}"
-echo -e "   ${YELLOW}sudo tail -f $LOG_DIR/tracker.log${NC}"
+echo -e "   ${YELLOW}sudo tail -f $INSTALL_DIR/logs/tracker.log${NC}"
 echo ""
 echo "5. Check the database:"
-echo -e "   ${YELLOW}sudo sqlite3 $DATA_DIR/metrics.db \"SELECT * FROM system_metrics ORDER BY timestamp DESC LIMIT 5;\"${NC}"
+echo -e "   ${YELLOW}sudo sqlite3 $INSTALL_DIR/data/metrics.db \"SELECT * FROM system_metrics ORDER BY timestamp DESC LIMIT 5;\"${NC}"

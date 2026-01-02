@@ -1,17 +1,16 @@
 .PHONY: help deploy sync install start stop restart status logs logs-tail \
         logs-failed query clean monitor verify view-data change-interval install-deps \
-        check-config config test-connection backup-db download-db disk-usage setup
+        check-config check-server config test-connection backup-db download-db disk-usage setup
 
 # Read configuration from config.yaml
 REMOTE_HOST := $(shell grep "^remote_host:" config.yaml | cut -d'"' -f2)
 SSH_PORT := $(shell grep "^ssh_port:" config.yaml | awk '{print $$2}')
 INSTALL_DIR := $(shell grep "install_dir:" config.yaml | cut -d'"' -f2)
 VENV_DIR := $(shell grep "venv_dir:" config.yaml | cut -d'"' -f2)
-CONFIG_DIR := $(shell grep "config_dir:" config.yaml | cut -d'"' -f2)
-DATA_DIR := $(shell grep "data_dir:" config.yaml | cut -d'"' -f2)
-LOG_DIR := $(shell grep "log_dir:" config.yaml | cut -d'"' -f2)
 DB_FILENAME := $(shell awk '/^database:/,/^[a-z]/ { if (/filename:/) { gsub(/"/, ""); print $$2 } }' config.yaml)
 LOG_FILENAME := $(shell awk '/^logging:/,/^[a-z]/ { if (/filename:/) { gsub(/"/, ""); print $$2 } }' config.yaml)
+DATA_DIR := $(INSTALL_DIR)/data
+LOG_DIR := $(INSTALL_DIR)/logs
 DB_PATH := $(DATA_DIR)/$(if $(DB_FILENAME),$(DB_FILENAME),metrics.db)
 LOG_PATH := $(LOG_DIR)/$(if $(LOG_FILENAME),$(LOG_FILENAME),tracker.log)
 
@@ -32,49 +31,62 @@ help:
 	@echo "  Database:      $(YELLOW)$(DB_PATH)$(NC)"
 	@echo "  (Edit config.yaml to change)"
 	@echo ""
-	@echo "Deployment:"
-	@echo "  $(YELLOW)make deploy$(NC)         - Deploy files to remote server at install_dir"
-	@echo "  $(YELLOW)make sync$(NC)           - Sync local changes to remote (faster, no restart)"
-	@echo "  $(YELLOW)make config$(NC)         - Show full configuration"
-	@echo "  $(YELLOW)make test-connection$(NC) - Test SSH connection to server"
+	@echo "$(GREEN)═══ LOCAL MACHINE COMMANDS ═══$(NC)"
 	@echo ""
-	@echo "Service Management (run on server):"
-	@echo "  $(YELLOW)make install-deps$(NC) - Install Python dependencies"
-	@echo "  $(YELLOW)make install$(NC)      - Install the tracker (run on server)"
-	@echo "  $(YELLOW)make start$(NC)        - Start service and enable at boot"
-	@echo "  $(YELLOW)make stop$(NC)         - Stop service and disable at boot"
-	@echo "  $(YELLOW)make restart$(NC)      - Restart the tracker service"
-	@echo "  $(YELLOW)make status$(NC)       - Check service status"
+	@echo "Deployment (run from your local machine):"
+	@echo "  $(YELLOW)make deploy$(NC)          - Deploy files to remote server"
+	@echo "  $(YELLOW)make sync$(NC)            - Sync local changes (faster)"
+	@echo "  $(YELLOW)make download-db$(NC)     - Download database from server"
+	@echo "  $(YELLOW)make test-connection$(NC) - Test SSH connection"
+	@echo "  $(YELLOW)make config$(NC)          - Show full configuration"
+	@echo "  $(YELLOW)make clean$(NC)           - Remove local temporary files"
 	@echo ""
-	@echo "Monitoring (run on server):"
-	@echo "  $(YELLOW)make monitor$(NC)        - Start live monitoring (refreshes every 60s)"
-	@echo "  $(YELLOW)make verify$(NC)         - Verify tracker is working correctly"
-	@echo "  $(YELLOW)make view-data$(NC)      - View collected metrics (last 20 entries)"
-	@echo "  $(YELLOW)make logs$(NC)           - View live logs"
-	@echo "  $(YELLOW)make logs-tail$(NC)      - View last 50 log lines"
-	@echo "  $(YELLOW)make logs-failed$(NC)    - View logs when service failed to start"
-	@echo "  $(YELLOW)make query$(NC)          - Query and display metrics"
-	@echo "  $(YELLOW)make disk-usage$(NC)     - Check database disk usage"
+	@echo "$(GREEN)═══ SERVER COMMANDS (SSH required) ═══$(NC)"
 	@echo ""
-	@echo "Configuration:"
+	@echo "Installation (run once on server):"
+	@echo "  $(YELLOW)make install$(NC)      - Install tracker and dependencies"
+	@echo "  $(YELLOW)make install-deps$(NC) - Install Python dependencies only"
+	@echo ""
+	@echo "Service Management:"
+	@echo "  $(YELLOW)make start$(NC)   - Start service and enable at boot"
+	@echo "  $(YELLOW)make stop$(NC)    - Stop service and disable at boot"
+	@echo "  $(YELLOW)make restart$(NC) - Restart the service"
+	@echo "  $(YELLOW)make status$(NC)  - Check service status"
+	@echo ""
+	@echo "Monitoring:"
+	@echo "  $(YELLOW)make monitor$(NC)      - Live monitoring (every 60s)"
+	@echo "  $(YELLOW)make verify$(NC)       - Verify tracker is working"
+	@echo "  $(YELLOW)make view-data$(NC)    - View metrics (last 20)"
+	@echo "  $(YELLOW)make logs$(NC)         - View live logs"
+	@echo "  $(YELLOW)make logs-tail$(NC)    - View last 50 log lines"
+	@echo "  $(YELLOW)make logs-failed$(NC)  - View failure logs"
+	@echo "  $(YELLOW)make query$(NC)        - Display current metrics"
+	@echo "  $(YELLOW)make disk-usage$(NC)   - Check database size"
+	@echo ""
+	@echo "Configuration & Maintenance:"
 	@echo "  $(YELLOW)make change-interval$(NC) - Change collection interval"
+	@echo "  $(YELLOW)make backup-db$(NC)       - Create database backup"
 	@echo ""
-	@echo "Maintenance:"
-	@echo "  $(YELLOW)make download-db$(NC) - Download database to local machine (from local)"
-	@echo "  $(YELLOW)make backup-db$(NC)   - Create backup of database (run on server)"
-	@echo "  $(YELLOW)make clean$(NC)       - Remove local temporary files"
-	@echo ""
-	@echo "Quick Start:"
-	@echo "  1. Edit $(YELLOW)config.yaml$(NC) and set your remote_host and install_dir"
-	@echo "  2. Run $(YELLOW)make deploy$(NC) to copy files to remote server"
-	@echo "  3. SSH to server: $(YELLOW)ssh $(REMOTE_HOST)$(NC)"
-	@echo "  4. Run $(YELLOW)cd $(INSTALL_DIR) && make install$(NC)"
-	@echo "  5. Run $(YELLOW)make start$(NC) to start and enable the service"
-	@echo "  6. Run $(YELLOW)make verify$(NC) to confirm it's working"
+	@echo "$(GREEN)Quick Start:$(NC)"
+	@echo "  1. $(YELLOW)[Local]$(NC)  Edit config.yaml and set remote_host"
+	@echo "  2. $(YELLOW)[Local]$(NC)  make deploy"
+	@echo "  3. $(YELLOW)[Local]$(NC)  ssh $(REMOTE_HOST)"
+	@echo "  4. $(YELLOW)[Server]$(NC) cd $(INSTALL_DIR) && make install"
+	@echo "  5. $(YELLOW)[Server]$(NC) make start"
+	@echo "  6. $(YELLOW)[Server]$(NC) make verify"
 
 check-config:
 	@if [ "$(REMOTE_HOST)" = "user@your-server.com" ]; then \
 		echo "$(RED)Error: Please set remote_host in config.yaml$(NC)"; \
+		exit 1; \
+	fi
+
+# Check if running on server (has systemd service installed)
+check-server:
+	@if [ ! -f /etc/systemd/system/utilization-tracker.service ]; then \
+		echo "$(RED)Error: This command must be run on the server$(NC)"; \
+		echo "$(YELLOW)Local commands: make deploy, make sync, make download-db, make test-connection, make config, make clean$(NC)"; \
+		echo "$(YELLOW)Server commands must be run after SSH'ing to the server$(NC)"; \
 		exit 1; \
 	fi
 
@@ -119,7 +131,7 @@ sync: check-config
 	@echo "If you changed Python code, restart the service:"
 	@echo "  $(YELLOW)ssh -p $(SSH_PORT) $(REMOTE_HOST) 'cd $(INSTALL_DIR) && make restart'$(NC)"
 
-install:
+install: check-server
 	@echo "$(GREEN)Installing utilization tracker...$(NC)"
 	@if [ ! -f scripts/install.sh ]; then \
 		echo "$(RED)Error: scripts/install.sh not found. Are you in the project directory?$(NC)"; \
@@ -128,43 +140,49 @@ install:
 	@chmod +x scripts/install.sh
 	sudo bash scripts/install.sh
 
-start:
+start: check-server
 	@echo "$(GREEN)Starting and enabling tracker service...$(NC)"
 	sudo systemctl start utilization-tracker
 	sudo systemctl enable utilization-tracker
 	@echo "$(GREEN)Service started and enabled at boot$(NC)"
 	@$(MAKE) status
 
-stop:
+stop: check-server
 	@echo "$(YELLOW)Stopping and disabling tracker service...$(NC)"
 	sudo systemctl stop utilization-tracker
 	sudo systemctl disable utilization-tracker
 	@echo "$(YELLOW)Service stopped and disabled at boot$(NC)"
 
-restart:
+restart: check-server
 	@echo "$(YELLOW)Restarting tracker service...$(NC)"
 	sudo systemctl restart utilization-tracker
 	@echo "$(GREEN)Service restarted$(NC)"
 	@$(MAKE) status
 
-status:
+status: check-server
 	@echo "$(GREEN)Service Status:$(NC)"
 	@sudo systemctl status utilization-tracker --no-pager || true
 
-logs:
+logs: check-server
 	@echo "$(GREEN)Streaming logs (Ctrl+C to exit)...$(NC)"
 	sudo journalctl -u utilization-tracker -f
 
-logs-tail:
+logs-tail: check-server
 	@echo "$(GREEN)Last 50 log entries:$(NC)"
 	sudo journalctl -u utilization-tracker -n 50 --no-pager
 
-query:
+query: check-server
 	@echo "$(GREEN)Querying metrics...$(NC)"
-	@sudo python3 src/query_remote.py || \
-	sudo sqlite3 $(DB_PATH) "SELECT datetime(timestamp) as time, cpu_percent, memory_percent, load_avg_1 FROM system_metrics ORDER BY timestamp DESC LIMIT 10;"
+	@echo "$(YELLOW)Database path: $(DB_PATH)$(NC)"
+	@if [ ! -f "$(DB_PATH)" ]; then \
+		echo "$(RED)Database file not found at: $(DB_PATH)$(NC)"; \
+		echo "$(YELLOW)Checking if service created database elsewhere...$(NC)"; \
+		find $(INSTALL_DIR) -name "*.db" 2>/dev/null || echo "No database files found"; \
+		exit 1; \
+	fi
+	@sqlite3 $(DB_PATH) "SELECT datetime(timestamp) as time, cpu_percent, memory_percent, load_avg_1 FROM system_metrics ORDER BY timestamp DESC LIMIT 10;"
 
-disk-usage:
+disk-usage: check-server
 	@echo "$(GREEN)Database disk usage:$(NC)"
 	@sudo du -h $(DB_PATH)
 	@sudo sqlite3 $(DB_PATH) "SELECT COUNT(*) as system_records FROM system_metrics; SELECT COUNT(*) as disk_records FROM disk_metrics;"
@@ -175,7 +193,7 @@ download-db: check-config
 	@scp -P $(SSH_PORT) $(REMOTE_HOST):$(DB_PATH) ./data/metrics-$$(date +%Y%m%d-%H%M%S).db
 	@echo "$(GREEN)Database downloaded to ./data/$(NC)"
 
-backup-db:
+backup-db: check-server
 	@echo "$(GREEN)Creating database backup...$(NC)"
 	@sudo cp $(DB_PATH) $(DATA_DIR)/metrics-backup-$$(date +%Y%m%d-%H%M%S).db
 	@sudo ls -lh $(DATA_DIR)/metrics-backup-*.db | tail -5
@@ -207,7 +225,6 @@ config:
 	@echo "Installation Paths:"
 	@echo "  Install Dir:   $(YELLOW)$(INSTALL_DIR)$(NC)"
 	@echo "  Venv Dir:      $(YELLOW)$(VENV_DIR)$(NC)"
-	@echo "  Config Dir:    $(YELLOW)$(CONFIG_DIR)$(NC)"
 	@echo "  Data Dir:      $(YELLOW)$(DATA_DIR)$(NC)"
 	@echo "  Log Dir:       $(YELLOW)$(LOG_DIR)$(NC)"
 	@echo ""
@@ -234,7 +251,7 @@ setup: install start
 	@echo ""
 
 # Install Python dependencies (uses venv if it exists)
-install-deps:
+install-deps: check-server
 	@echo "$(GREEN)Installing Python dependencies...$(NC)"
 	@VENV_PATH="$(VENV_DIR)"; \
 	if [ -z "$$VENV_PATH" ]; then VENV_PATH="$(INSTALL_DIR)/venv"; fi; \
@@ -254,7 +271,7 @@ install-deps:
 	@echo "$(GREEN)Dependencies installed$(NC)"
 
 # Start live monitoring (refreshes every 60 seconds)
-monitor:
+monitor: check-server
 	@echo "$(GREEN)Starting live monitoring (Ctrl+C to exit)...$(NC)"
 	@echo ""
 	@while true; do \
@@ -275,7 +292,7 @@ monitor:
 	done
 
 # Verify tracker is working correctly
-verify:
+verify: check-server
 	@echo "$(GREEN)Verifying Utilization Tracker...$(NC)"
 	@echo ""
 	@echo "$(YELLOW)1. Checking service status...$(NC)"
@@ -317,7 +334,7 @@ verify:
 	@echo "$(GREEN)✓ Verification complete - tracker is working!$(NC)"
 
 # View collected data (last 20 entries)
-view-data:
+view-data: check-server
 	@echo "$(GREEN)Viewing collected metrics (last 20 entries)...$(NC)"
 	@echo ""
 	@echo "$(YELLOW)System Metrics:$(NC)"
@@ -329,7 +346,7 @@ view-data:
 	@echo "To view more data, use: $(YELLOW)make query$(NC) or directly query the database"
 
 # Change collection interval
-change-interval:
+change-interval: check-server
 	@echo "$(GREEN)Change Collection Interval$(NC)"
 	@echo ""
 	@echo "Current interval: $(YELLOW)$$(grep 'collection_interval:' config.yaml | awk '{print $$2}') seconds$(NC)"
@@ -355,7 +372,7 @@ change-interval:
 	fi
 
 # View logs when service failed to start
-logs-failed:
+logs-failed: check-server
 	@echo "$(RED)Service Failure Logs$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Recent errors from journalctl:$(NC)"
