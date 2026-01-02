@@ -48,6 +48,7 @@ pip3 install psutil pyyaml || {
 echo -e "${GREEN}[3/7] Copying application files...${NC}"
 cp -r src/* "$INSTALL_DIR/src/"
 chmod +x "$INSTALL_DIR/src/tracker.py"
+chmod +x "$INSTALL_DIR/src/query_remote.py" 2>/dev/null || true
 
 echo -e "${GREEN}[4/7] Installing configuration file...${NC}"
 if [ -f "$CONFIG_DIR/config.yaml" ]; then

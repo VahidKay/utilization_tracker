@@ -1,5 +1,10 @@
 # Configuration for Resource Utilization Tracker
 
+# Remote server connection (used by Makefile commands)
+# Format: user@hostname or user@ip-address
+remote_host: "user@your-server.com"
+ssh_port: 22
+
 # Data collection interval in seconds
 collection_interval: 60
 
@@ -23,4 +28,4 @@ metrics:
   temperature: true
 
 # Data retention (days)
-retention_days: 30
+retention_days: 365

@@ -24,8 +24,38 @@ A lightweight Python tool for monitoring and recording resource utilization on U
 - SSH access to the server
 - Python 3.6+
 - Root/sudo privileges
+- Make (optional, for convenient commands)
 
-### Deployment
+### Deployment (Using Makefile - Recommended)
+
+1. **Edit [config.yaml](config.yaml)** and set your server:
+
+```yaml
+remote_host: "user@your-server.com"
+ssh_port: 22
+```
+
+2. **Deploy and start** with a single command:
+
+```bash
+make setup
+```
+
+That's it! The tracker is now running on your server.
+
+**Common commands:**
+
+```bash
+make status     # Check if running
+make logs       # View live logs
+make query      # See collected metrics
+make restart    # Restart service
+make redeploy   # Update after code changes
+```
+
+See [MAKEFILE_GUIDE.md](MAKEFILE_GUIDE.md) for all commands.
+
+### Deployment (Manual Method)
 
 1. **From your local machine**, deploy to your remote server:
 
