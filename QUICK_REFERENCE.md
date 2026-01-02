@@ -13,14 +13,10 @@ make deploy
 
 **On remote server (after SSH):**
 ```bash
-# 3. Install and start
-cd ~/utilization-tracker
-make setup
-
-# Or step by step:
-# make install
-# make start
-# make enable
+# 3. Install and start (cd to install_dir from config.yaml)
+cd /opt/utilization-tracker
+make install
+make start enable
 ```
 
 ## Daily Commands (run on server)
@@ -44,10 +40,12 @@ make disable       # Don't auto-start
 ## Deployment (run on local machine)
 
 ```bash
-make deploy        # Copy files to server
+make deploy        # Copy files to server at install_dir
+make sync          # Quick sync changed files (faster, for development)
 ```
 
-Then SSH to server and run `make install` or `make setup`
+**First time:** Use `make deploy`, then SSH to server and run `make install`
+**Updates:** Use `make sync`, then SSH to server and run `make restart`
 
 ## Monitoring
 
@@ -72,7 +70,6 @@ make clean         # Clean local files
 make test-connection  # Test SSH
 make logs-tail        # Check for errors
 make restart          # Try restarting
-make redeploy         # Reinstall
 ```
 
 ## Configuration
@@ -88,12 +85,14 @@ retention_days: 365
 
 ## File Locations (on server)
 
+All paths are configured in [config.yaml](config.yaml):
+
 | Path | Description |
 |------|-------------|
-| `/opt/utilization-tracker/` | Application files |
-| `/etc/utilization-tracker/config.yaml` | Configuration |
-| `/var/lib/utilization-tracker/metrics.db` | Database |
-| `/var/log/utilization-tracker/tracker.log` | Log file |
+| `install_dir` (default: `/opt/utilization-tracker/`) | Application files |
+| `config_dir` (default: `/opt/utilization-tracker/config/`) | Configuration |
+| `data_dir` (default: `/opt/utilization-tracker/data/`) | Database |
+| `log_dir` (default: `/opt/utilization-tracker/logs/`) | Log files |
 
 ## SSH Commands (alternative to make)
 

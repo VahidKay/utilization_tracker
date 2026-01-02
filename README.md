@@ -12,9 +12,11 @@ A lightweight Python tool for monitoring and recording resource utilization on U
 
 - **Persistent Storage**: SQLite database for historical data analysis
 - **Automatic Management**: Systemd service for continuous monitoring
+- **Isolated Dependencies**: Python virtual environment (no system package conflicts)
 - **Configurable**: YAML-based configuration for collection intervals and retention
 - **Low Overhead**: Minimal CPU and memory footprint
 - **Automatic Cleanup**: Configurable data retention with automatic cleanup
+- **Easy Development**: Fast sync for iterative code changes with `make sync`
 
 ## Quick Start
 
@@ -49,11 +51,19 @@ make deploy
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
-make setup
+cd /opt/utilization-tracker  # or your custom install_dir from config.yaml
+make install
+make start enable
 ```
 
 That's it! The tracker is now running on your server.
+
+**For development (quick sync of code changes):**
+
+```bash
+make sync       # Sync local changes to remote (from local machine)
+# Then restart: ssh user@server 'cd /path && make restart'
+```
 
 **Common commands (run on server):**
 

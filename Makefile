@@ -1,5 +1,6 @@
-.PHONY: help deploy install start stop restart status enable disable logs query clean \
-        monitor verify view-data change-interval logs-failed install-deps
+.PHONY: help deploy sync install start stop restart status enable disable logs logs-tail \
+        logs-failed query clean monitor verify view-data change-interval install-deps \
+        check-config config test-connection backup-db download-db disk-usage setup
 
 # Read configuration from config.yaml
 REMOTE_HOST := $(shell grep "^remote_host:" config.yaml | cut -d'"' -f2)
@@ -31,8 +32,10 @@ help:
 	@echo "  (Edit config.yaml to change)"
 	@echo ""
 	@echo "Deployment:"
-	@echo "  $(YELLOW)make deploy$(NC)      - Copy files to remote server"
-	@echo "  $(YELLOW)make config$(NC)      - Show full configuration"
+	@echo "  $(YELLOW)make deploy$(NC)         - Deploy files to remote server at install_dir"
+	@echo "  $(YELLOW)make sync$(NC)           - Sync local changes to remote (faster, no restart)"
+	@echo "  $(YELLOW)make config$(NC)         - Show full configuration"
+	@echo "  $(YELLOW)make test-connection$(NC) - Test SSH connection to server"
 	@echo ""
 	@echo "Service Management (run on server):"
 	@echo "  $(YELLOW)make install-deps$(NC) - Install Python dependencies"
@@ -62,12 +65,13 @@ help:
 	@echo "  $(YELLOW)make backup-db$(NC)   - Create backup of database (run on server)"
 	@echo "  $(YELLOW)make clean$(NC)       - Remove local temporary files"
 	@echo ""
-	@echo "Workflow:"
-	@echo "  1. Edit $(YELLOW)config.yaml$(NC) and set your remote_host"
-	@echo "  2. Run $(YELLOW)make deploy$(NC) from local machine"
-	@echo "  3. SSH to server and run $(YELLOW)make install$(NC)"
-	@echo "  4. Run $(YELLOW)make start enable$(NC) on server"
-	@echo "  5. Run $(YELLOW)make status$(NC) on server to verify"
+	@echo "Quick Start:"
+	@echo "  1. Edit $(YELLOW)config.yaml$(NC) and set your remote_host and install_dir"
+	@echo "  2. Run $(YELLOW)make deploy$(NC) to copy files to remote server"
+	@echo "  3. SSH to server: $(YELLOW)ssh $(REMOTE_HOST)$(NC)"
+	@echo "  4. Run $(YELLOW)cd $(INSTALL_DIR) && make install$(NC)"
+	@echo "  5. Run $(YELLOW)make start enable$(NC) to start the service"
+	@echo "  6. Run $(YELLOW)make verify$(NC) to confirm it's working"
 
 check-config:
 	@if [ "$(REMOTE_HOST)" = "user@your-server.com" ]; then \
@@ -76,9 +80,39 @@ check-config:
 	fi
 
 deploy: check-config
-	@echo "$(GREEN)Copying files to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
+	@echo "$(GREEN)Deploying to $(REMOTE_HOST):$(SSH_PORT)...$(NC)"
+	@echo "$(GREEN)Target directory: $(INSTALL_DIR)$(NC)"
 	@chmod +x scripts/deploy.sh
-	./scripts/deploy.sh $(REMOTE_HOST) $(SSH_PORT)
+	@./scripts/deploy.sh $(REMOTE_HOST) $(SSH_PORT)
+	@echo ""
+	@echo "$(GREEN)Deployment complete!$(NC)"
+	@echo ""
+	@echo "To install and start on remote server:"
+	@echo "  $(YELLOW)ssh -p $(SSH_PORT) $(REMOTE_HOST)$(NC)"
+	@echo "  $(YELLOW)cd $(INSTALL_DIR)$(NC)"
+	@echo "  $(YELLOW)make install$(NC)"
+	@echo "  $(YELLOW)make start enable$(NC)"
+
+# Sync local changes to remote (faster than full deploy, doesn't reinstall)
+sync: check-config
+	@echo "$(GREEN)Syncing to $(REMOTE_HOST):$(INSTALL_DIR)...$(NC)"
+	@if ! command -v rsync >/dev/null 2>&1; then \
+		echo "$(RED)Error: rsync not found. Please install rsync.$(NC)"; \
+		exit 1; \
+	fi
+	@rsync -avz --delete -e "ssh -p $(SSH_PORT)" \
+		--exclude='.git' \
+		--exclude='__pycache__' \
+		--exclude='*.pyc' \
+		--exclude='data' \
+		--exclude='.DS_Store' \
+		--exclude='venv' \
+		./ $(REMOTE_HOST):$(INSTALL_DIR)/
+	@echo ""
+	@echo "$(GREEN)Sync complete!$(NC)"
+	@echo ""
+	@echo "If you changed Python code, restart the service:"
+	@echo "  $(YELLOW)ssh -p $(SSH_PORT) $(REMOTE_HOST) 'cd $(INSTALL_DIR) && make restart'$(NC)"
 
 install:
 	@echo "$(GREEN)Installing utilization tracker...$(NC)"
@@ -163,7 +197,7 @@ clean:
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
-	@rm -rf /tmp/utilization-tracker-deploy-* 2>/dev/null || true
+	@find . -type f -name ".DS_Store" -delete 2>/dev/null || true
 	@echo "$(GREEN)Cleanup complete$(NC)"
 
 config:
@@ -202,11 +236,18 @@ setup: install start enable
 	@echo "  $(YELLOW)make query$(NC)   - View metrics"
 	@echo ""
 
-# Install Python dependencies
+# Install Python dependencies (uses venv if it exists)
 install-deps:
 	@echo "$(GREEN)Installing Python dependencies...$(NC)"
-	@if command -v pip3 >/dev/null 2>&1; then \
-		sudo pip3 install -r requirements.txt; \
+	@if [ -d "$(INSTALL_DIR)/venv" ]; then \
+		echo "$(GREEN)Using virtual environment at $(INSTALL_DIR)/venv$(NC)"; \
+		sudo $(INSTALL_DIR)/venv/bin/pip install -r requirements.txt; \
+	elif command -v pip3 >/dev/null 2>&1; then \
+		echo "$(YELLOW)No venv found, installing system-wide...$(NC)"; \
+		sudo pip3 install -r requirements.txt 2>/dev/null || { \
+			echo "$(YELLOW)pip3 install failed, trying apt...$(NC)"; \
+			sudo apt update && sudo apt install -y python3-psutil python3-yaml; \
+		}; \
 	else \
 		echo "$(YELLOW)pip3 not found, trying apt...$(NC)"; \
 		sudo apt update && sudo apt install -y python3-psutil python3-yaml; \

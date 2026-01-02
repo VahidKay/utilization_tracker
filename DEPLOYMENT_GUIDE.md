@@ -21,24 +21,25 @@ remote_host: "user@your-server.com"
 ssh_port: 22
 ```
 
-### 2. Deploy to Server
+### 2. Deploy Files
 
-From your local machine:
+From your local machine, run:
 
 ```bash
 make deploy
 ```
 
-This copies all files to `~/utilization-tracker` on your server.
+This will copy all files to your remote server at the `install_dir` location specified in `config.yaml` (default: `/opt/utilization-tracker`).
 
-### 3. Install on Server
+### 3. Install and Start
 
-SSH to your server:
+SSH to your server and run the installation:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
-make setup
+cd /opt/utilization-tracker  # or your custom install_dir
+make install
+make start enable
 ```
 
 That's it! The tracker is now installed, running, and enabled at boot.
@@ -47,25 +48,18 @@ That's it! The tracker is now installed, running, and enabled at boot.
 
 ### Local Machine Commands
 
-| Command | Description |
-|---------|-------------|
-| `make deploy` | Copy files to remote server |
-| `make config` | Show current configuration |
-| `make download-db` | Download database from server |
-| `make test-connection` | Test SSH connection to server |
-| `make clean` | Clean local temporary files |
+| Command                | Description                                    |
+|------------------------|------------------------------------------------|
+| `make deploy`          | Deploy files to remote server install_dir      |
+| `make sync`            | Sync local changes to remote (faster, no reinstall) |
+| `make config`          | Show current configuration                     |
+| `make download-db`     | Download database from server                  |
+| `make test-connection` | Test SSH connection to server                  |
+| `make clean`           | Clean local temporary files                    |
 
 ### Server Commands
 
-Run these after SSH'ing to your server (`cd ~/utilization-tracker`):
-
-#### Installation & Setup
-
-| Command             | Description                                |
-|---------------------|--------------------------------------------|
-| `make install-deps` | Install Python dependencies                |
-| `make install`      | Install the tracker (run once)             |
-| `make setup`        | Install + start + enable (all-in-one)      |
+After deploying, SSH to your server (`ssh user@your-server.com`) and run these commands from your `install_dir` (e.g., `/opt/utilization-tracker`):
 
 #### Service Management
 
@@ -105,7 +99,7 @@ Run these after SSH'ing to your server (`cd ~/utilization-tracker`):
 
 ## Manual Deployment (Without Make)
 
-If you prefer not to use Make:
+If you prefer not to use Make, follow these steps:
 
 ### 1. Deploy Files
 
@@ -114,14 +108,17 @@ chmod +x scripts/deploy.sh
 ./scripts/deploy.sh user@your-server.com
 ```
 
-### 2. Install on Server
+This copies files to the server at the `install_dir` specified in config.yaml.
+
+### 2. Install and Start
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd /opt/utilization-tracker  # or your custom install_dir
 sudo bash scripts/install.sh
 sudo systemctl start utilization-tracker
 sudo systemctl enable utilization-tracker
+sudo systemctl status utilization-tracker
 ```
 
 ## Installation Paths
@@ -129,8 +126,11 @@ sudo systemctl enable utilization-tracker
 After installation, files are located at:
 
 ```
-/opt/utilization-tracker/          # Main installation
+/opt/utilization-tracker/          # Main installation (or your custom install_dir)
 ├── src/                           # Application code
+├── venv/                          # Python virtual environment
+│   ├── bin/python3                # Python interpreter used by service
+│   └── lib/                       # Installed packages (psutil, pyyaml)
 ├── config/                        # Configuration
 │   └── config.yaml
 ├── data/                          # Database
@@ -140,6 +140,8 @@ After installation, files are located at:
 ```
 
 These paths can be customized in [config.yaml](config.yaml).
+
+**Important:** The tracker uses a Python virtual environment at `$INSTALL_DIR/venv` to avoid conflicts with system packages. The systemd service automatically uses the Python interpreter from this venv.
 
 ## Configuration
 
@@ -160,7 +162,7 @@ Or locally before deploying (edit [config.yaml](config.yaml)).
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make change-interval
 ```
 
@@ -182,7 +184,7 @@ Common intervals:
 
 #### Manual Configuration
 
-Edit the config file directly:
+Edit the config file directly on the server (path is `$INSTALL_DIR/config.yaml` from your config.yaml settings):
 
 ```yaml
 collection_interval: 60  # Seconds between collections
@@ -211,7 +213,7 @@ metrics:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make restart
 ```
 
@@ -223,7 +225,7 @@ Start a live monitoring dashboard that refreshes every 60 seconds:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make monitor
 ```
 
@@ -241,7 +243,7 @@ Run a comprehensive verification check:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make verify
 ```
 
@@ -258,7 +260,7 @@ View the last 20 collected metrics in a formatted table:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make view-data
 ```
 
@@ -268,7 +270,7 @@ Shows both system metrics (CPU, memory, load) and disk metrics.
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make status
 ```
 
@@ -276,7 +278,7 @@ make status
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make logs
 ```
 
@@ -286,7 +288,7 @@ Press Ctrl+C to exit.
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make logs-tail
 ```
 
@@ -296,7 +298,7 @@ Shows the last 50 log entries.
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make query
 ```
 
@@ -304,7 +306,7 @@ make query
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make disk-usage
 ```
 
@@ -320,24 +322,51 @@ Database saved to `./data/metrics-YYYYMMDD-HHMMSS.db`
 
 ## Updating the Tracker
 
-After making code changes:
+After making code changes locally, you have two options:
 
-### 1. Deploy Updates
+### Option 1: Quick Sync (Recommended for code changes)
 
-From local machine:
+Use `make sync` to quickly sync only the changed files:
+
+```bash
+make sync
+```
+
+This uses `rsync` to efficiently copy only the changed files to the remote server. Then restart the service:
+
+```bash
+ssh user@your-server.com
+cd /opt/utilization-tracker  # or your custom install_dir
+make restart
+```
+
+**Benefits:**
+- Much faster than full deploy
+- Only transfers changed files
+- Doesn't reinstall dependencies or recreate venv
+- Perfect for iterative development
+
+### Option 2: Full Deploy (For major changes)
+
+Use `make deploy` for a complete redeployment:
 
 ```bash
 make deploy
 ```
 
-### 2. Reinstall on Server
+Then SSH to server and reinstall:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
-make install
+cd /opt/utilization-tracker  # or your custom install_dir
+make install  # Only needed if dependencies changed
 make restart
 ```
+
+Use this when:
+- Adding new Python dependencies
+- Changing configuration structure
+- Major refactoring
 
 ## Troubleshooting
 
@@ -347,7 +376,7 @@ make restart
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make logs-failed
 ```
 
@@ -364,7 +393,7 @@ If you see import errors or missing module errors:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd /opt/utilization-tracker  # or your custom install_dir
 make install-deps
 make restart
 ```
@@ -390,7 +419,7 @@ Should show `root` as the user.
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make backup-db
 sudo rm /opt/utilization-tracker/data/metrics.db
 make restart
@@ -416,7 +445,7 @@ If it fails, check:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make query
 ```
 
@@ -504,7 +533,7 @@ Verify everything is working:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make verify
 ```
 
@@ -514,7 +543,7 @@ See recent metrics in a formatted table:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make view-data
 ```
 
@@ -524,7 +553,7 @@ Watch metrics update in real-time:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make monitor
 ```
 
@@ -534,7 +563,7 @@ Change how often metrics are collected:
 
 ```bash
 ssh user@your-server.com
-cd ~/utilization-tracker
+cd $INSTALL_DIR  # cd to your install_dir from config.yaml
 make change-interval
 # Follow prompts, then:
 make restart

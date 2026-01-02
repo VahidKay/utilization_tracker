@@ -7,10 +7,10 @@ ssh_port: 22
 
 # Installation paths (system directories on the server)
 paths:
-  install_dir: "/opt/utilization-tracker"
-  config_dir: "/opt/utilization-tracker/config"
-  data_dir: "/opt/utilization-tracker/data"
-  log_dir: "/opt/utilization-tracker/logs"
+  install_dir: "~/work/utilization-tracker"
+  config_dir: "~/work/utilization-tracker/config"
+  data_dir: "~/work/utilization-tracker/data"
+  log_dir: "~/work/utilization-tracker/logs"
 
 # Data collection interval in seconds
 collection_interval: 60
